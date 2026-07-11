@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧復健水瓶 - 角度動態監測</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; }
+.container { max-width: 850px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+h1 { text-align: center; color: #23395d; font-size: 1.8rem; margin-bottom: 5px; }
+.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 30px; font-size: 0.95rem; }
+.data-boxes { display: flex; justify-content: center; margin-bottom: 30px; gap: 25px; }
+.box { width: 220px; padding: 20px; border-radius: 12px; text-align: center; color: white; font-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+.box-x { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
+.box-y { background: linear-gradient(135deg, #1dd1a1, #10ac84); }
+.title-text { font-size: 1rem; opacity: 0.9; display: block; margin-bottom: 8px; }
+.value { font-size: 2.8rem; font-weight: bold; display: inline-block; }
+.unit { font-size: 1.2rem; margin-left: 3px; }
+.chart-container { position: relative; height: 380px; width: 100%; background: #fafafa; padding: 10px; border-radius: 8px; border: 1px solid #edf2f7; }
+</style>
+</head>
+<body>
+
+<div class="container">
+<h1>🍼 智慧復健水瓶角度監測系統</h1>
+<div class="subtitle">患者手部即時關節活動度 (ROM) 追蹤後台</div>
+
+<div class="data-boxes">
+<div class="box box-x">
+<span class="title-text">前後傾斜 (X 軸)</span>
+<span id="valX" class="value">0</span><span class="unit">°</span>
+</div>
+<div class="box box-y">
+<span class="title-text">左右手腕翻轉 (Y 軸)</span>
+<span id="valY" class="value">0</span><span class="unit">°</span>
+</div>
+</div>
+
+<div class="chart-container">
+<canvas id="rehabChart"></canvas>
+</div>
+</div>
+
+<script>
+const firebaseConfig = { databaseURL: "https://rehab-bottle-default-rtdb.firebaseio.com" };
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+const ctx = document.getElementById('rehabChart').getContext('2d');
+const maxDataPoints = 40;
+
+const rehabChart = new Chart(ctx, {
+type: 'line',
+data: {
+labels: [],
+datasets: [
+{ label: '前後傾斜角度 (彎曲/伸展)', borderColor: '#ee5253', backgroundColor: 'rgba(238,82,83,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 },
+{ label: '手腕旋轉角度 (旋前/旋後)', borderColor: '#10ac84', backgroundColor: 'rgba(16,172,132,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 }
+]
+},
+options: {
+responsive: true,
+maintainAspectRatio: false,
+plugins: { legend: { position: 'top' } },
+scales: {
+y: {
+min: -90,
+max: 90,
+title: { display: true, text: '活動角度 (度數 °)' }
+}
+}
+}
+});
+
+database.ref('/rehab_bottle').on('value', (snapshot) => {
+const data = snapshot.val();
+if (data) {
+const x = data.angle_X;
+const y = data.angle_Y;
+
+document.getElementById('valX').innerText = x;
+document.getElementById('valY').innerText = y;
+
+const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+if (rehabChart.data.labels.length >= maxDataPoints) {
+rehabChart.data.labels.shift();
+rehabChart.data.datasets[0].data.shift();
+rehabChart.data.datasets[1].data.shift();
+}
+
+rehabChart.data.labels.push(now);
+rehabChart.data.datasets[0].data.push(x);
+rehabChart.data.datasets[1].data.push(y);
+
+rehabChart.update('none');
+}
+});
+</script>
+
+</body>
+</html>

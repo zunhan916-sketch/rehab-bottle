@@ -12,11 +12,31 @@
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; }
 .container { max-width: 850px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
 h1 { text-align: center; color: #23395d; font-size: 1.8rem; margin-bottom: 5px; }
-.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 30px; font-size: 0.95rem; }
+.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 25px; font-size: 0.95rem; }
+
+/* 新增：目標設定區塊 */
+.target-setter { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 25px; background: #eef2f7; padding: 15px; border-radius: 12px; font-weight: bold; color: #2c3e50; }
+.target-setter input { width: 70px; padding: 8px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; }
+
 .data-boxes { display: flex; justify-content: center; margin-bottom: 30px; gap: 25px; }
-.box { width: 220px; padding: 20px; border-radius: 12px; text-align: center; color: white; font-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+.box { width: 220px; padding: 20px; border-radius: 12px; text-align: center; color: white; transition: all 0.3s ease; position: relative; }
 .box-x { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
-.box-y { background: linear-gradient(135deg, #1dd1a1, #10ac84); }
+.box-y { background: linear-gradient(135deg, #7f8c8d, #95a5a6); } /* 預設未達標時的冷色調 */
+
+/* 新增：達標時的強烈綠光閃爍特效 */
+.box-y.achieved {
+background: linear-gradient(135deg, #1dd1a1, #10ac84) !important;
+animation: pulse 1s infinite alternate;
+box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
+}
+@keyframes pulse {
+0% { transform: scale(1); }
+100% { transform: scale(1.03); }
+}
+
+.badge { display: none; background: #fff; color: #10ac84; padding: 3px 8px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; position: absolute; top: 10px; right: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.box-y.achieved .badge { display: block; }
+
 .title-text { font-size: 1rem; opacity: 0.9; display: block; margin-bottom: 8px; }
 .value { font-size: 2.8rem; font-weight: bold; display: inline-block; }
 .unit { font-size: 1.2rem; margin-left: 3px; }
@@ -29,12 +49,20 @@ h1 { text-align: center; color: #23395d; font-size: 1.8rem; margin-bottom: 5px; 
 <h1>🍼 智慧復健水瓶角度監測系統</h1>
 <div class="subtitle">患者手部即時關節活動度 (ROM) 追蹤後台</div>
 
+<!-- 新增：醫生或患者可以自由輸入今日的復健目標角度 -->
+<div class="target-setter">
+🎯 今日手腕旋轉目標角度：
+<input type="number" id="targetAngleInput" value="45" min="1" max="90"> 度 (°)
+</div>
+
 <div class="data-boxes">
 <div class="box box-x">
 <span class="title-text">前後傾斜 (X 軸)</span>
 <span id="valX" class="value">0</span><span class="unit">°</span>
 </div>
-<div class="box box-y">
+<!-- 加上 id="boxY" 以便 JavaScript 動態控制特效 -->
+<div class="box box-y" id="boxY">
+<span class="badge" id="badgeText">🎉 完美達標</span>
 <span class="title-text">左右手腕翻轉 (Y 軸)</span>
 <span id="valY" class="value">0</span><span class="unit">°</span>
 </div>
@@ -67,11 +95,7 @@ responsive: true,
 maintainAspectRatio: false,
 plugins: { legend: { position: 'top' } },
 scales: {
-y: {
-min: -90,
-max: 90,
-title: { display: true, text: '活動角度 (度數 °)' }
-}
+y: { min: -90, max: 90, title: { display: true, text: '活動角度 (度數 °)' } }
 }
 }
 });
@@ -84,6 +108,16 @@ const y = data.angle_Y;
 
 document.getElementById('valX').innerText = x;
 document.getElementById('valY').innerText = y;
+
+// 新增：動態比對目標角度邏輯 (取絕對值，不管往左轉還往右轉都算)
+const currentTarget = parseInt(document.getElementById('targetAngleInput').value) || 45;
+const boxYElement = document.getElementById('boxY');
+
+if (Math.abs(y) >= currentTarget) {
+boxYElement.classList.add('achieved'); // 啟動達標特效
+} else {
+boxYElement.classList.remove('achieved'); // 取消達標特效
+}
 
 const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 

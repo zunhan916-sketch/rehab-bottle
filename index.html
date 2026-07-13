@@ -1,242 +1,311 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智慧復健水瓶 - 3D動態監測</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍼 智慧復健水瓶 3D 角度與肌電雙模態監測系統</title>
+    <!-- 引入原本網頁可能使用的 FontAwesome 圖標與 Chart.js 圖表庫 -->
+    <link rel="stylesheet" href="https://cloudflare.com">
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-dark: #1e293b;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --primary: #38bdf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #f43f5e;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--card-dark);
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            border: 1px solid var(--border-color);
+        }
+        h1 {
+            font-size: 26px;
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            text-align: center;
+            color: var(--text-sub);
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        /* 控制連線區塊 */
+        .control-panel {
+            display: flex;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        button {
+            flex: 1;
+            padding: 14px;
+            font-size: 15px;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-serial { background: #0284c7; color: white; }
+        .btn-serial:hover { background: #0369a1; }
+        .btn-simulate { background: #475569; color: white; }
+        .btn-simulate:hover { background: #334155; }
+        .btn-disconnect { background: var(--danger); color: white; }
 
-<style>
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; }
-.container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
-h1 { text-align: center; color: #23395d; font-size: 1.8rem; margin-bottom: 5px; }
-.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 25px; font-size: 0.95rem; }
+        /* 主要儀表板佈局 */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        @media (max-width: 768px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: #111827;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            position: relative;
+        }
+        .card-title {
+            font-size: 14px;
+            color: var(--text-sub);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .angle-large {
+            font-size: 56px;
+            font-weight: bold;
+            color: var(--danger);
+            text-align: center;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 15px;
+            color: #cbd5e1;
+        }
 
-.target-setter { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 25px; background: #eef2f7; padding: 15px; border-radius: 12px; font-weight: bold; color: #2c3e50; }
-.target-setter input { width: 70px; padding: 8px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; }
+        /* 🔄 3D 姿態模擬視覺化區塊 */
+        .preview-box {
+            height: 200px;
+            background: #030712;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            border: 1px dashed #4b5563;
+        }
+        .bottle-container {
+            perspective: 400px;
+        }
+        .bottle-3d {
+            width: 50px;
+            height: 110px;
+            background: linear-gradient(135deg, #38bdf8, #0284c7);
+            border-radius: 10px 10px 6px 6px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.05s linear;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        }
+        .bottle-3d::before {
+            content: '';
+            position: absolute;
+            top: -12px;
+            left: 15px;
+            width: 20px;
+            height: 12px;
+            background: #0c4a6e;
+            border-radius: 3px 3px 0 0;
+        }
+        .direction-tag {
+            position: absolute;
+            bottom: 8px;
+            font-size: 12px;
+            color: #4b5563;
+        }
 
-.main-content { display: flex; flex-direction: column; gap: 20px; }
-.top-row { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: stretch; }
+        /* 💪 EMG 肌電能量條 */
+        .emg-section {
+            margin-top: 15px;
+        }
+        .progress-bg {
+            width: 100%;
+            background: #334155;
+            height: 30px;
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #4b5563;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), #34d399);
+            transition: width 0.08s ease-out;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+        .progress-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+        }
 
-.box-wrapper { display: flex; flex-direction: column; gap: 20px; width: 240px; }
-.box { padding: 20px; border-radius: 12px; text-align: center; color: white; transition: all 0.3s ease; position: relative; }
-.box-x { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
-.box-y { background: linear-gradient(135deg, #7f8c8d, #95a5a6); }
+        /* 🎉 智能診斷狀態欄 */
+        .status-banner {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            padding: 16px;
+            border-radius: 14px;
+            background: #334155;
+            color: #cbd5e1;
+            margin-bottom: 25px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .status-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border-color: var(--success);
+        }
+        .status-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+        .status-info {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--primary);
+            border-color: var(--primary);
+        }
 
-.box-y.achieved {
-background: linear-gradient(135deg, #1dd1a1, #10ac84) !important;
-animation: pulse 1s infinite alternate;
-box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
-}
-@keyframes pulse {
-0% { transform: scale(1); }
-100% { transform: scale(1.03); }
-}
-
-.badge { display: none; background: #fff; color: #10ac84; padding: 3px 8px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; position: absolute; top: 10px; right: 10px; }
-.box-y.achieved .badge { display: block; }
-.title-text { font-size: 1rem; opacity: 0.9; display: block; margin-bottom: 8px; }
-.value { font-size: 2.5rem; font-weight: bold; display: inline-block; }
-.unit { font-size: 1.2rem; margin-left: 3px; }
-
-/* ================= 升級：立體 3D 視覺化區域 ================= */
-.visual-container { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 280px; height: 260px; perspective: 800px; /* 增強 3D 縱深感 */ }
-.visual-title { color: #64748b; font-size: 0.9rem; margin-bottom: 30px; font-weight: bold; }
-
-/* 3D 旋轉舞台容器 */
-.bottle-stage { width: 60px; height: 130px; position: relative; transform-style: preserve-3d; transition: transform 0.1s ease-out; }
-
-/* 定義 3D 立方體瓶子的 6 個面 */
-.bottle-face { position: absolute; width: 60px; height: 130px; background: rgba(52, 152, 219, 0.85); border: 2px solid #2980b9; box-sizing: border-box; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; border-radius: 4px; }
-
-/* 將六個面定位到各自的 3D 空間位置 (厚度設為 40px) */
-.face-front { transform: rotateY( 0deg) translateZ(20px); background: linear-gradient(to bottom, #4fa7e6, #2980b9); }
-.face-back { transform: rotateY(180deg) translateZ(20px); background: #2471a3; }
-.face-left { transform: rotateY(-90deg) translateZ(20px); width: 40px; left: 10px; background: #21618c; }
-.face-right { transform: rotateY( 90deg) translateZ(20px); width: 40px; left: 10px; background: #2e86c1; }
-.face-top { transform: rotateX( 90deg) translateZ(20px); height: 40px; top: 45px; background: #5dade2; border-radius: 0; }
-.face-bottom { transform: rotateX(-90deg) translateZ(110px); height: 40px; top: 45px; background: #1b4f72; }
-
-/* 3D 瓶蓋 */
-.cap-stage { width: 24px; height: 20px; position: absolute; top: -20px; left: 18px; transform-style: preserve-3d; }
-.cap-face { position: absolute; width: 24px; height: 20px; background: rgba(241, 196, 15, 0.9); border: 1px solid #d4ac0d; box-sizing: border-box; }
-.cap-front { transform: rotateY( 0deg) translateZ(10px); }
-.cap-back { transform: rotateY(180deg) translateZ(10px); }
-.cap-left { transform: rotateY(-90deg) translateZ(10px); width: 20px; left: 2px; background: #b7950b; }
-.cap-right { transform: rotateY( 90deg) translateZ(10px); width: 20px; left: 2px; background: #f4d03f; }
-.cap-top { transform: rotateX( 90deg) translateZ(10px); height: 20px; top: 0px; background: #f7dc6f; }
-/* ======================================================== */
-
-/* 折線圖控制按鈕 */
-.toggle-btn-container { text-align: center; margin-top: 10px; }
-.toggle-chart-btn { background-color: #23395d; color: white; border: none; padding: 12px 24px; font-size: 1rem; font-weight: bold; border-radius: 30px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 8px; }
-.toggle-chart-btn:hover { background-color: #172640; transform: translateY(-1px); }
-.toggle-chart-btn:active { transform: translateY(1px); }
-
-/* 圖表可摺疊區域 */
-.collapsible-chart {
-max-height: 0;
-overflow: hidden;
-transition: max-height 0.4s ease-out, opacity 0.3s ease-out;
-opacity: 0;
-background: #fafafa;
-border-radius: 12px;
-border: 0px solid #edf2f7;
-margin-top: 0;
-}
-.collapsible-chart.show {
-max-height: 460px;
-opacity: 1;
-border: 1px solid #edf2f7;
-margin-top: 15px;
-padding: 15px;
-}
-.chart-container { position: relative; height: 400px; width: 100%; }
-</style>
+        /* 📊 即時趨勢圖表區塊 */
+        .chart-toggle-btn {
+            width: 100%;
+            background: #334155;
+            color: #cbd5e1;
+            padding: 10px;
+            font-size: 14px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .chart-container {
+            background: #111827;
+            padding: 15px;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            display: block; /* 預設展開 */
+        }
+    </style>
 </head>
 <body>
 
 <div class="container">
-<h1>🍼 智慧復健水瓶 3D 角度監測系統</h1>
-<div class="subtitle">患者手部即時關節活動度 (ROM) 追蹤後台</div>
+    <h1>🍼 智慧復健水瓶 3D 角度與肌電監測系統</h1>
+    <div class="subtitle">結合精準關節活動度 (ROM) 與 Grove-EMG 表面肌電信號反代償系統</div>
 
-<div class="target-setter">
-🎯 今日手腕旋轉目標角度：
-<input type="number" id="targetAngleInput" value="45" min="1" max="90"> 度 (°)
-</div>
+    <!-- 頂部控制面板 -->
+    <div class="control-panel">
+        <button class="btn-serial" id="connectBtn" onclick="connectHardware()">
+            <i class="fa-solid fa-plug"></i> 讀取實體硬體 (Web Serial)
+        </button>
+        <button class="btn-disconnect" id="disconnectBtn" onclick="disconnectHardware()" style="display:none;">
+            <i class="fa-solid fa-circle-xmark"></i> 中斷硬體連線
+        </button>
+        <button class="btn-simulate" id="simulateBtn" onclick="toggleSimulation()">
+            <i class="fa-solid fa-wave-square"></i> 開啟動態數據模擬
+        </button>
+    </div>
 
-<div class="main-content">
-<div class="top-row">
-<div class="box-wrapper">
-<div class="box box-x">
-<span class="title-text">前後傾斜 (X 軸)</span>
-<span id="valX" class="value">0</span><span class="unit">°</span>
-</div>
-<div class="box box-y" id="boxY">
-<span class="badge">🎉 完美達標</span>
-<span class="title-text">左右手腕翻轉 (Y 軸)</span>
-<span id="valY" class="value">0</span><span class="unit">°</span>
-</div>
-</div>
+    <!-- 📊 雙指標智能判定 Banner -->
+    <div id="statusBanner" class="status-banner">
+        🔄 系統就緒：請連接 ESP32-S 硬體或開啟動態模擬...
+    </div>
 
-<div class="visual-container">
-<div class="visual-title">🔄 水瓶實體姿態 3D 模擬</div>
-<div class="bottle-stage" id="bottleStage">
-<div class="cap-stage">
-<div class="cap-face cap-front"></div>
-<div class="cap-face cap-back"></div>
-<div class="cap-face cap-left"></div>
-<div class="cap-face cap-right"></div>
-<div class="cap-face cap-top"></div>
-</div>
-<div class="bottle-face face-front">前</div>
-<div class="bottle-face face-back">後</div>
-<div class="bottle-face face-left"></div>
-<div class="bottle-face face-right"></div>
-<div class="bottle-face face-top"></div>
-<div class="bottle-face face-bottom"></div>
-</div>
-</div>
-</div>
+    <!-- 主要資料看板群 -->
+    <div class="dashboard-grid">
+       
+        <!-- 左側：3D 角度追蹤面板 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fa-solid fa-bullseye" style="color:var(--danger)"></i>
+                手腕旋轉目標角度
+            </div>
+            <div class="angle-large">45 <span style="font-size:20px;">°</span></div>
+           
+            <div class="data-row">
+                <span>前後傾斜 (X 軸)：</span>
+                <span id="txtX" style="font-weight:bold;">0 °</span>
+            </div>
+            <div class="data-row" style="border-bottom: 1px solid #1f2937; padding-bottom: 8px;">
+                <span>左右翻轉 (Y 軸)：</span>
+                <span id="txtY" style="font-weight:bold; color:var(--primary);">0 °</span>
+            </div>
 
-<div class="toggle-btn-container">
-<button class="toggle-chart-btn" id="toggleChartBtn" onclick="toggleChartView()">
-📊 展開即時趨勢圖表
-</button>
-</div>
+            <div class="card-title" style="margin-top:12px;">
+                <i class="fa-solid fa-cube" style="color:var(--primary)"></i>
+                水瓶實體姿態 3D 模擬
+            </div>
+            <div class="preview-box">
+                <span class="direction-tag" style="top:8px; left:8px;">前</span>
+                <span class="direction-tag" style="bottom:8px; right:8px;">後</span>
+                <div class="bottle-container">
+                    <div id="bottle3D" class="bottle-3d"></div>
+                </div>
+            </div>
+        </div>
 
-<div class="collapsible-chart" id="chartSection">
-<div class="chart-container">
-<canvas id="rehabChart"></canvas>
-</div>
-</div>
-</div>
-</div>
-
-<script>
-const firebaseConfig = { databaseURL: "https://rehab-bottle-default-rtdb.firebaseio.com" };
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-
-function toggleChartView() {
-const chartSection = document.getElementById('chartSection');
-const btn = document.getElementById('toggleChartBtn');
-
-if (chartSection.classList.contains('show')) {
-chartSection.classList.remove('show');
-btn.innerHTML = '📊 展開即時趨勢圖表';
-} else {
-chartSection.classList.add('show');
-btn.innerHTML = '🔽 隱藏即時趨勢圖表';
-setTimeout(() => { rehabChart.resize(); }, 100);
-}
-}
-
-const ctx = document.getElementById('rehabChart').getContext('2d');
-const maxDataPoints = 40;
-
-const rehabChart = new Chart(ctx, {
-type: 'line',
-data: {
-labels: [],
-datasets: [
-{ label: '前後傾斜角度 (X 軸)', borderColor: '#ee5253', backgroundColor: 'rgba(238,82,83,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 },
-{ label: '手腕旋轉角度 (Y 軸)', borderColor: '#10ac84', backgroundColor: 'rgba(16,172,132,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 }
-]
-},
-options: {
-responsive: true,
-maintainAspectRatio: false,
-plugins: { legend: { position: 'top' } },
-scales: {
-y: { min: -90, max: 90, title: { display: true, text: '活動角度 (度數 °)' } }
-}
-}
-});
-
-database.ref('/rehab_bottle').on('value', (snapshot) => {
-const data = snapshot.val();
-if (data) {
-const x = data.angle_X;
-const y = data.angle_Y;
-
-document.getElementById('valX').innerText = x;
-document.getElementById('valY').innerText = y;
-
-// 立體 3D 控制：
-// rotateX 控制前後仰角 (X 軸數據)
-// rotateY 控制左右旋轉 (Y 軸數據)
-// 為了讓使用者更好辨識正面，額外帶一點點初始角度調整
-const bottleStage = document.getElementById('bottleStage');
-bottleStage.style.transform = `rotateX(${-x}deg) rotateY(${y}deg) rotateZ(0deg)`;
-
-const currentTarget = parseInt(document.getElementById('targetAngleInput').value) || 45;
-const boxYElement = document.getElementById('boxY');
-
-if (Math.abs(y) >= currentTarget) {
-boxYElement.classList.add('achieved');
-} else {
-boxYElement.classList.remove('achieved');
-}
-
-const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-if (rehabChart.data.labels.length >= maxDataPoints) {
-rehabChart.data.labels.shift();
-rehabChart.data.datasets[0].data.shift();
-rehabChart.data.datasets[1].data.shift();
-}
-
-rehabChart.data.labels.push(now);
-rehabChart.data.datasets[0].data.push(x);
-rehabChart.data.datasets[1].data.push(y);
-
-rehabChart.update('none');
-}
-});
-</script>
-
-</body>
-</html>
+        <!-- 右側：Grove-EMG 肌電圖監測面板 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fa-solid fa-bolt" style="color:var(--success)"></i>
+                Grove - EMG 肌肉發力即時狀態
+            </div>
+           
+            <div class="data-row" style="margin-top: 15px;">
+                <span>感測器類比電壓：</span>
+                <span id="emgVoltage" style="font-weight:bold; font-family:monospace; color:var(--success); font-size:20px;">1500 mV</span>
+            </div>
+            <div class="data-row">
+                <span>相對肌肉發力率：</span>

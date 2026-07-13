@@ -10,20 +10,22 @@
 
 <style>
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; }
-.container { max-width: 850px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+.container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
 h1 { text-align: center; color: #23395d; font-size: 1.8rem; margin-bottom: 5px; }
 .subtitle { text-align: center; color: #7f8c8d; margin-bottom: 25px; font-size: 0.95rem; }
 
-/* 新增：目標設定區塊 */
 .target-setter { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 25px; background: #eef2f7; padding: 15px; border-radius: 12px; font-weight: bold; color: #2c3e50; }
 .target-setter input { width: 70px; padding: 8px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; }
 
-.data-boxes { display: flex; justify-content: center; margin-bottom: 30px; gap: 25px; }
-.box { width: 220px; padding: 20px; border-radius: 12px; text-align: center; color: white; transition: all 0.3s ease; position: relative; }
-.box-x { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
-.box-y { background: linear-gradient(135deg, #7f8c8d, #95a5a6); } /* 預設未達標時的冷色調 */
+/* 調整版面：左邊放數據與3D瓶子，右邊放圖表 */
+.main-content { display: flex; gap: 30px; flex-wrap: wrap; }
+.left-panel { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 20px; }
+.right-panel { flex: 2; min-width: 450px; }
 
-/* 新增：達標時的強烈綠光閃爍特效 */
+.box { padding: 20px; border-radius: 12px; text-align: center; color: white; transition: all 0.3s ease; position: relative; }
+.box-x { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
+.box-y { background: linear-gradient(135deg, #7f8c8d, #95a5a6); }
+
 .box-y.achieved {
 background: linear-gradient(135deg, #1dd1a1, #10ac84) !important;
 animation: pulse 1s infinite alternate;
@@ -34,13 +36,26 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 100% { transform: scale(1.03); }
 }
 
-.badge { display: none; background: #fff; color: #10ac84; padding: 3px 8px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; position: absolute; top: 10px; right: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.badge { display: none; background: #fff; color: #10ac84; padding: 3px 8px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; position: absolute; top: 10px; right: 10px; }
 .box-y.achieved .badge { display: block; }
-
 .title-text { font-size: 1rem; opacity: 0.9; display: block; margin-bottom: 8px; }
-.value { font-size: 2.8rem; font-weight: bold; display: inline-block; }
+.value { font-size: 2.5rem; font-weight: bold; display: inline-block; }
 .unit { font-size: 1.2rem; margin-left: 3px; }
-.chart-container { position: relative; height: 380px; width: 100%; background: #fafafa; padding: 10px; border-radius: 8px; border: 1px solid #edf2f7; }
+
+/* ================= 新增：3D 視覺化瓶子區域 ================= */
+.visual-container { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 260px; perspective: 600px; /* 啟動 3D 透視效果 */ }
+.visual-title { color: #64748b; font-size: 0.9rem; margin-bottom: 20px; font-weight: bold; }
+
+/* 這裡用純 CSS 畫出一個水瓶的形狀 */
+.bottle-wrapper { transform-style: preserve-3d; transition: transform 0.1s ease-out; /* 讓轉動稍微平滑一點 */ }
+.bottle { width: 60px; height: 140px; background: linear-gradient(90deg, #3498db, #2980b9); border-radius: 10px 10px 15px 15px; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+/* 瓶蓋 */
+.bottle::before { content: ""; width: 30px; height: 15px; background: #f1c40f; position: absolute; top: -15px; left: 15px; border-radius: 3px 3px 0 0; }
+/* 瓶身水線裝飾 */
+.bottle::after { content: ""; width: 60px; height: 80px; background: rgba(255,255,255,0.2); position: absolute; bottom: 0; left: 0; border-radius: 0 0 15px 15px; }
+/* ======================================================== */
+
+.chart-container { position: relative; height: 430px; width: 100%; background: #fafafa; padding: 10px; border-radius: 8px; border: 1px solid #edf2f7; }
 </style>
 </head>
 <body>
@@ -49,27 +64,39 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 <h1>🍼 智慧復健水瓶角度監測系統</h1>
 <div class="subtitle">患者手部即時關節活動度 (ROM) 追蹤後台</div>
 
-<!-- 新增：醫生或患者可以自由輸入今日的復健目標角度 -->
 <div class="target-setter">
 🎯 今日手腕旋轉目標角度：
 <input type="number" id="targetAngleInput" value="45" min="1" max="90"> 度 (°)
 </div>
 
-<div class="data-boxes">
+<div class="main-content">
+<!-- 左邊面板：放置即時數字與 3D 模擬瓶子 -->
+<div class="left-panel">
 <div class="box box-x">
 <span class="title-text">前後傾斜 (X 軸)</span>
 <span id="valX" class="value">0</span><span class="unit">°</span>
 </div>
-<!-- 加上 id="boxY" 以便 JavaScript 動態控制特效 -->
 <div class="box box-y" id="boxY">
-<span class="badge" id="badgeText">🎉 完美達標</span>
+<span class="badge">🎉 完美達標</span>
 <span class="title-text">左右手腕翻轉 (Y 軸)</span>
 <span id="valY" class="value">0</span><span class="unit">°</span>
 </div>
+
+<!-- 新增的動態模擬區塊 -->
+<div class="visual-container">
+<div class="visual-title">🔄 水瓶即時姿態模擬</div>
+<div class="bottle-wrapper" id="bottleWrapper">
+<div class="bottle"></div>
+</div>
+</div>
 </div>
 
+<!-- 右邊面板：放置即時折線圖 -->
+<div class="right-panel">
 <div class="chart-container">
 <canvas id="rehabChart"></canvas>
+</div>
+</div>
 </div>
 </div>
 
@@ -86,8 +113,8 @@ type: 'line',
 data: {
 labels: [],
 datasets: [
-{ label: '前後傾斜角度 (彎曲/伸展)', borderColor: '#ee5253', backgroundColor: 'rgba(238,82,83,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 },
-{ label: '手腕旋轉角度 (旋前/旋後)', borderColor: '#10ac84', backgroundColor: 'rgba(16,172,132,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 }
+{ label: '前後傾斜角度 (X 軸)', borderColor: '#ee5253', backgroundColor: 'rgba(238,82,83,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 },
+{ label: '手腕旋轉角度 (Y 軸)', borderColor: '#10ac84', backgroundColor: 'rgba(16,172,132,0.1)', data: [], fill: false, tension: 0.4, borderWidth: 3 }
 ]
 },
 options: {
@@ -109,14 +136,18 @@ const y = data.angle_Y;
 document.getElementById('valX').innerText = x;
 document.getElementById('valY').innerText = y;
 
-// 新增：動態比對目標角度邏輯 (取絕對值，不管往左轉還往右轉都算)
+// 核心：控制小網頁瓶子的 3D 旋轉效果
+// rotateX 對應前後傾斜，rotateZ 對應手腕左右旋轉
+const bottleWrapper = document.getElementById('bottleWrapper');
+bottleWrapper.style.transform = `rotateX(${-x}deg) rotateZ(${-y}deg)`;
+
 const currentTarget = parseInt(document.getElementById('targetAngleInput').value) || 45;
 const boxYElement = document.getElementById('boxY');
 
 if (Math.abs(y) >= currentTarget) {
-boxYElement.classList.add('achieved'); // 啟動達標特效
+boxYElement.classList.add('achieved');
 } else {
-boxYElement.classList.remove('achieved'); // 取消達標特效
+boxYElement.classList.remove('achieved');
 }
 
 const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });

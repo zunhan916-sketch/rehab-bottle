@@ -17,11 +17,11 @@ h1 { text-align: center; color: #23395d; font-size: 1.8rem; margin-bottom: 5px; 
 .target-setter { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 25px; background: #eef2f7; padding: 15px; border-radius: 12px; font-weight: bold; color: #2c3e50; }
 .target-setter input { width: 70px; padding: 8px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; }
 
-/* 調整版面：左邊放數據與3D瓶子，右邊放圖表 */
-.main-content { display: flex; gap: 30px; flex-wrap: wrap; }
-.left-panel { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 20px; }
-.right-panel { flex: 2; min-width: 450px; }
+/* 版面配置：改為垂直排列，上方是核心數字與3D模擬，下方是可摺疊圖表 */
+.main-content { display: flex; flex-direction: column; gap: 20px; }
+.top-row { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: stretch; }
 
+.box-wrapper { display: flex; flex-direction: column; gap: 20px; width: 240px; }
 .box { padding: 20px; border-radius: 12px; text-align: center; color: white; transition: all 0.3s ease; position: relative; }
 .box-x { background: linear-gradient(135deg, #ff6b6b, #ee5253); }
 .box-y { background: linear-gradient(135deg, #7f8c8d, #95a5a6); }
@@ -42,20 +42,42 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 .value { font-size: 2.5rem; font-weight: bold; display: inline-block; }
 .unit { font-size: 1.2rem; margin-left: 3px; }
 
-/* ================= 新增：3D 視覺化瓶子區域 ================= */
-.visual-container { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 260px; perspective: 600px; /* 啟動 3D 透視效果 */ }
+/* 3D 視覺化瓶子區域 */
+.visual-container { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 260px; height: 215px; perspective: 600px; }
 .visual-title { color: #64748b; font-size: 0.9rem; margin-bottom: 20px; font-weight: bold; }
 
-/* 這裡用純 CSS 畫出一個水瓶的形狀 */
-.bottle-wrapper { transform-style: preserve-3d; transition: transform 0.1s ease-out; /* 讓轉動稍微平滑一點 */ }
-.bottle { width: 60px; height: 140px; background: linear-gradient(90deg, #3498db, #2980b9); border-radius: 10px 10px 15px 15px; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
-/* 瓶蓋 */
-.bottle::before { content: ""; width: 30px; height: 15px; background: #f1c40f; position: absolute; top: -15px; left: 15px; border-radius: 3px 3px 0 0; }
-/* 瓶身水線裝飾 */
-.bottle::after { content: ""; width: 60px; height: 80px; background: rgba(255,255,255,0.2); position: absolute; bottom: 0; left: 0; border-radius: 0 0 15px 15px; }
-/* ======================================================== */
+.bottle-wrapper { transform-style: preserve-3d; transition: transform 0.1s ease-out; }
+.bottle { width: 55px; height: 130px; background: linear-gradient(90deg, #3498db, #2980b9); border-radius: 10px 10px 15px 15px; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+.bottle::before { content: ""; width: 26px; height: 14px; background: #f1c40f; position: absolute; top: -14px; left: 14px; border-radius: 3px 3px 0 0; }
+.bottle::after { content: ""; width: 55px; height: 75px; background: rgba(255,255,255,0.2); position: absolute; bottom: 0; left: 0; border-radius: 0 0 15px 15px; }
 
-.chart-container { position: relative; height: 430px; width: 100%; background: #fafafa; padding: 10px; border-radius: 8px; border: 1px solid #edf2f7; }
+/* ================= 新增：折線圖控制按鈕與動畫區塊 ================= */
+.toggle-btn-container { text-align: center; margin-top: 10px; }
+.toggle-chart-btn { background-color: #23395d; color: white; border: none; padding: 12px 24px; font-size: 1rem; font-weight: bold; border-radius: 30px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 8px; }
+.toggle-chart-btn:hover { background-color: #172640; transform: translateY(-1px); }
+.toggle-chart-btn:active { transform: translateY(1px); }
+
+/* 圖表可摺疊區域的動畫特效 */
+.collapsible-chart {
+max-height: 0;
+overflow: hidden;
+transition: max-height 0.4s ease-out, opacity 0.3s ease-out;
+opacity: 0;
+background: #fafafa;
+border-radius: 12px;
+border: 0px solid #edf2f7;
+margin-top: 0;
+}
+/* 當被加上 .show 樣式時，就會平滑展開 */
+.collapsible-chart.show {
+max-height: 460px; /* 大於圖表容器的高度 */
+opacity: 1;
+border: 1px solid #edf2f7;
+margin-top: 15px;
+padding: 15px;
+}
+.chart-container { position: relative; height: 400px; width: 100%; }
+/* ================================================================ */
 </style>
 </head>
 <body>
@@ -70,8 +92,9 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 </div>
 
 <div class="main-content">
-<!-- 左邊面板：放置即時數字與 3D 模擬瓶子 -->
-<div class="left-panel">
+<!-- 上方區塊：數字方塊與3D瓶子並排 -->
+<div class="top-row">
+<div class="box-wrapper">
 <div class="box box-x">
 <span class="title-text">前後傾斜 (X 軸)</span>
 <span id="valX" class="value">0</span><span class="unit">°</span>
@@ -81,8 +104,8 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 <span class="title-text">左右手腕翻轉 (Y 軸)</span>
 <span id="valY" class="value">0</span><span class="unit">°</span>
 </div>
+</div>
 
-<!-- 新增的動態模擬區塊 -->
 <div class="visual-container">
 <div class="visual-title">🔄 水瓶即時姿態模擬</div>
 <div class="bottle-wrapper" id="bottleWrapper">
@@ -91,8 +114,15 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 </div>
 </div>
 
-<!-- 右邊面板：放置即時折線圖 -->
-<div class="right-panel">
+<!-- 中間：功能切換按鈕 -->
+<div class="toggle-btn-container">
+<button class="toggle-chart-btn" id="toggleChartBtn" onclick="toggleChartView()">
+📊 展開即時趨勢圖表
+</button>
+</div>
+
+<!-- 下方：可隱藏的圖表區塊 -->
+<div class="collapsible-chart" id="chartSection">
 <div class="chart-container">
 <canvas id="rehabChart"></canvas>
 </div>
@@ -104,6 +134,22 @@ box-shadow: 0 0 20px rgba(29, 209, 161, 0.6);
 const firebaseConfig = { databaseURL: "https://rehab-bottle-default-rtdb.firebaseio.com" };
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
+
+// 控制圖表展開/收合的 JavaScript 函式
+function toggleChartView() {
+const chartSection = document.getElementById('chartSection');
+const btn = document.getElementById('toggleChartBtn');
+
+if (chartSection.classList.contains('show')) {
+chartSection.classList.remove('show');
+btn.innerHTML = '📊 展開即時趨勢圖表';
+} else {
+chartSection.classList.add('show');
+btn.innerHTML = '🔽 隱藏即時趨勢圖表';
+// 展開時強迫 Chart.js 重新計算寬高以防止圖表縮水變形
+setTimeout(() => { rehabChart.resize(); }, 100);
+}
+}
 
 const ctx = document.getElementById('rehabChart').getContext('2d');
 const maxDataPoints = 40;
@@ -136,8 +182,6 @@ const y = data.angle_Y;
 document.getElementById('valX').innerText = x;
 document.getElementById('valY').innerText = y;
 
-// 核心：控制小網頁瓶子的 3D 旋轉效果
-// rotateX 對應前後傾斜，rotateZ 對應手腕左右旋轉
 const bottleWrapper = document.getElementById('bottleWrapper');
 bottleWrapper.style.transform = `rotateX(${-x}deg) rotateZ(${-y}deg)`;
 

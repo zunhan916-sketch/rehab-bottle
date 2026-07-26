@@ -7,6 +7,10 @@
 <!-- 引入 Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<!-- ☁️ 引入 Firebase SDK (Compat 版本) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
 <style>
 :root {
   --bg-color: #f1f5f9;
@@ -65,7 +69,6 @@ body {
   padding: 4px 8px;
 }
 
-/* 遮罩層 (手機側邊欄開啟時出現) */
 .sidebar-overlay {
   display: none;
   position: fixed;
@@ -135,7 +138,6 @@ body {
   width: 100%;
 }
 
-/* 頂部連接控制面板 */
 .top-control-panel {
   background: #ffffff;
   padding: 20px 25px;
@@ -150,7 +152,6 @@ body {
   flex-wrap: wrap;
 }
 
-/* 麵包屑 */
 .breadcrumb {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -394,6 +395,8 @@ body {
 .btn-warning:hover { background-color: #ca8a04; }
 .btn-success { background-color: #10b981; }
 .btn-success:hover { background-color: #059669; }
+.btn-danger { background-color: #ef4444; }
+.btn-danger:hover { background-color: #dc2626; }
 
 .select-interval {
   padding: 10px 18px;
@@ -430,7 +433,7 @@ body {
   padding: 25px;
   border-radius: 16px;
   border: 1px solid rgba(226, 232, 240, 0.8);
-  margin-top: 30px;
+  margin-top: 20px;
   box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.04);
 }
 .record-section h3 {
@@ -440,7 +443,7 @@ body {
   font-weight: 700;
 }
 .table-container {
-  max-height: 250px;
+  max-height: 400px;
   overflow-y: auto;
   overflow-x: auto;
   border: 1px solid #e2e8f0;
@@ -448,7 +451,7 @@ body {
 }
 table {
   width: 100%;
-  min-width: 400px;
+  min-width: 600px;
   border-collapse: collapse;
 }
 th, td {
@@ -467,53 +470,16 @@ th {
   border-bottom: 2px solid #e2e8f0;
 }
 
-/* ================= 📱 RWD 響應式手機樣式適應 ================= */
 @media (max-width: 900px) {
-  .mobile-header {
-    display: flex;
-  }
-  
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    transform: translateX(-100%);
-  }
-  
-  .sidebar.active {
-    transform: translateX(0);
-  }
-
-  .main-content {
-    padding: 75px 15px 20px 15px; /* 為頂部手機 Bar 預留高度 */
-  }
-
-  .top-control-panel {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .top-control-panel > div {
-    flex-direction: column;
-    align-items: stretch !important;
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .form-group.full-width {
-    grid-column: span 1;
-  }
-
-  .visual-container {
-    width: 100%;
-  }
-
-  .info-panel {
-    padding: 20px;
-  }
+  .mobile-header { display: flex; }
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; transform: translateX(-100%); }
+  .sidebar.active { transform: translateX(0); }
+  .main-content { padding: 75px 15px 20px 15px; }
+  .top-control-panel { flex-direction: column; align-items: stretch; }
+  .form-grid { grid-template-columns: 1fr; }
+  .form-group.full-width { grid-column: span 1; }
+  .visual-container { width: 100%; }
+  .info-panel { padding: 20px; }
 }
 </style>
 </head>
@@ -525,7 +491,6 @@ th {
   <button class="menu-toggle-btn" onclick="toggleSidebar()">☰</button>
 </div>
 
-<!-- 手機側邊欄遮罩 -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
 <!-- 左側導覽列 -->
@@ -547,36 +512,51 @@ th {
     <span class="nav-icon">💪</span>
     <span>壓力握力評估</span>
   </div>
+  <div class="nav-item" onclick="switchTab('cloud-tab', this); closeSidebarMobile();">
+    <span class="nav-icon">☁️</span>
+    <span>雲端歷史紀錄</span>
+  </div>
 </div>
 
 <!-- 右側主內容區 -->
 <div class="main-content">
 
-<!-- 頂部連接控制面板 (藍牙連線版) -->
 <div class="top-control-panel">
   <div style="display: flex; align-items: center; gap: 18px;">
     <button class="btn btn-primary" id="globalConnectBtn" onclick="connectBluetooth()">🔵 一鍵連線藍牙裝置</button>
     <span id="globalStatusText" style="font-weight: 700; color: var(--text-muted); font-size: 0.95rem;">硬體狀態：🔴 尚未連接</span>
   </div>
 
-  <!-- ⏱️ 選單 -->
-  <div style="display: flex; align-items: center; gap: 12px;">
-    <label for="updateIntervalSelect" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem;">⏱️ 更新頻率：</label>
-    <select id="updateIntervalSelect" class="select-interval" onchange="changeUpdateInterval(this.value)">
-      <option value="20">極速 (20ms)</option>
-      <option value="100" selected>高流暢 (100ms)</option>
-      <option value="500">一般 (500ms)</option>
-      <option value="1000">慢速 (1秒)</option>
-    </select>
+  <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+    <!-- 畫面渲染頻率 -->
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label for="updateIntervalSelect" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem;">💻 畫面刷新：</label>
+      <select id="updateIntervalSelect" class="select-interval" onchange="changeUpdateInterval(this.value)">
+        <option value="20">極速 (20ms)</option>
+        <option value="100" selected>順暢 (100ms)</option>
+        <option value="500">一般 (500ms)</option>
+        <option value="1000">慢速 (1秒)</option>
+      </select>
+    </div>
+
+    <!-- ☁️ 雲端上傳頻率 -->
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label for="cloudIntervalSelectHeader" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem;">☁️ 雲端上傳：</label>
+      <select id="cloudIntervalSelectHeader" class="select-interval" onchange="changeCloudInterval(this.value)">
+        <option value="200">0.2 秒 / 筆</option>
+        <option value="500">0.5 秒 / 筆</option>
+        <option value="1000" selected>1.0 秒 / 筆</option>
+        <option value="2000">2.0 秒 / 筆</option>
+        <option value="5000">5.0 秒 / 筆</option>
+      </select>
+    </div>
   </div>
 </div>
 
-<!-- 麵包屑 -->
 <div class="breadcrumb">
   <span>首頁</span> &gt; <span id="current-breadcrumb" class="current">系統首頁</span>
 </div>
 
-<!-- 患者基本資料顯示區 (上方常駐) -->
 <div class="info-panel">
   <h2 id="panel-title">智慧復健系統首頁</h2>
   <div class="info-grid">
@@ -590,7 +570,7 @@ th {
   <div class="info-date">檢測日期：<span id="live-clock">—</span></div>
 </div>
 
-<!-- ================= 🏠 系統首頁分頁 (輸入表單) ================= -->
+<!-- 🏠 系統首頁 -->
 <div id="home-tab" class="tab-content active">
   <div class="home-container">
     <h3>📝 填寫個人基本資料</h3>
@@ -607,7 +587,7 @@ th {
       </div>
       <div class="form-group">
         <label for="input-id">病歷號 / ID</label>
-        <input type="text" id="input-id" placeholder="例如：U123456789">
+        <input type="text" id="input-id" placeholder="例如：1">
       </div>
       <div class="form-group">
         <label for="input-gender">性別</label>
@@ -646,7 +626,7 @@ th {
   </div>
 </div>
 
-<!-- ================= 2-智慧水瓶分頁 ================= -->
+<!-- 🍼 智慧水瓶分頁 -->
 <div id="bottle-tab" class="tab-content">
   <div class="cards-row">
     <div class="metric-card">
@@ -683,7 +663,7 @@ th {
   </div>
 </div>
 
-<!-- ================= 3-肌電訊號 (EMG) 分頁 ================= -->
+<!-- ⚡ 肌電訊號分頁 -->
 <div id="emg-tab" class="tab-content">
   <div class="control-row">
     <button class="btn btn-warning" id="emgPauseBtn" onclick="toggleEMGPause()">暫停即時更新</button>
@@ -716,29 +696,9 @@ th {
       <canvas id="emgChart"></canvas>
     </div>
   </div>
-
-  <div class="record-section">
-    <h3>數值歷史紀錄 (最新在最上方)</h3>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th width="20%">編號</th>
-            <th width="40%">記錄時間</th>
-            <th width="40%">EMG 數值 (0-4095)</th>
-          </tr>
-        </thead>
-        <tbody id="emgRecordTableBody">
-          <tr>
-            <td colspan="3" style="color:#94a3b8; text-align:center;">尚未開始接收數據</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
-<!-- ================= 4-壓力監測儀分頁 ================= -->
+<!-- 💪 壓力監測儀分頁 -->
 <div id="pressure-tab" class="tab-content">
   <div class="control-row">
     <button class="btn btn-warning" id="tareBtn" onclick="zeroCalibration()">⚖️ 歸零校準</button>
@@ -767,42 +727,125 @@ th {
   </div>
 </div>
 
+<!-- ☁️ 雲端歷史紀錄分頁 -->
+<div id="cloud-tab" class="tab-content">
+  <div class="control-row">
+    <button class="btn btn-primary" onclick="loadCloudData()">🔄 手動整理雲端數據</button>
+    <button class="btn btn-success" onclick="exportToCSV()">📥 匯出為 Excel (CSV)</button>
+    <button class="btn btn-danger" onclick="clearCloudData()">🗑️ 清除此患者之雲端資料</button>
+   
+    <div style="display: flex; align-items: center; gap: 8px; margin-left: 10px;">
+      <label for="cloudIntervalSelectTab" style="font-weight: 700; color: var(--text-muted);">☁️ 上傳頻率：</label>
+      <select id="cloudIntervalSelectTab" class="select-interval" onchange="changeCloudInterval(this.value)">
+        <option value="200">極速 (0.2秒/筆)</option>
+        <option value="500">快速 (0.5秒/筆)</option>
+        <option value="1000" selected>標準 (1.0秒/筆)</option>
+        <option value="2000">省容量 (2.0秒/筆)</option>
+        <option value="5000">慢速 (5.0秒/筆)</option>
+      </select>
+    </div>
+
+    <span id="cloudStatusText" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem;"></span>
+  </div>
+
+  <div class="record-section">
+    <h3>☁️ Firebase 雲端資料庫歷史總覽</h3>
+    <div class="table-container" style="max-height: 500px;">
+      <table>
+        <thead>
+          <tr>
+            <th width="18%">記錄時間</th>
+            <th width="12%">患者姓名</th>
+            <th width="10%">X軸角度</th>
+            <th width="10%">Y軸角度</th>
+            <th width="15%">肌電 (EMG)</th>
+            <th width="15%">壓力 (ADC)</th>
+          </tr>
+        </thead>
+        <tbody id="cloudRecordTableBody">
+          <tr>
+            <td colspan="6" style="color:#94a3b8; text-align:center;">正在連線雲端資料庫...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
-// ================= 📱 手機版側邊欄選單開關邏輯 =================
-function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  sidebar.classList.toggle('active');
-  overlay.classList.toggle('active');
+// ================= ☁️ Firebase 初始化設定 =================
+const firebaseConfig = {
+  apiKey: "AIzaSyC3VvI4_4wkzbo6ps4Xk9XgThMPd1uQG6Y",
+  authDomain: "esp32-rehab-system.firebaseapp.com",
+  databaseURL: "https://esp32-rehab-system-default-rtdb.firebaseio.com",
+  projectId: "esp32-rehab-system",
+  storageBucket: "esp32-rehab-system.firebasestorage.app",
+  messagingSenderId: "315284994845",
+  appId: "1:315284994845:web:d085aa0b58db54e2c67ff4",
+  measurementId: "G-GEJR5GW358"
+};
+
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+let lastCloudUploadTime = 0;
+let CLOUD_UPLOAD_INTERVAL = 1000; // 預設 1000ms (1秒) 上傳一次
+
+// 動態修改雲端上傳頻率 (雙向同步選單)
+function changeCloudInterval(val) {
+  CLOUD_UPLOAD_INTERVAL = parseInt(val);
+  document.getElementById('cloudIntervalSelectHeader').value = val;
+  document.getElementById('cloudIntervalSelectTab').value = val;
 }
 
+function uploadToFirebase(dataPayload) {
+  const patientId = patientData.id ? patientData.id.trim() : "1";
+  const recordRef = database.ref(`rehab_records/${patientId}`).push();
+
+  recordRef.set({
+    timestamp: Date.now(),
+    dateTime: new Date().toLocaleString(),
+    patientName: patientData.name || "未填寫",
+    patientAge: patientData.age || "",
+    patientGender: patientData.gender || "",
+    doctor: patientData.doctor || "",
+    angleX: dataPayload.angleX,
+    angleY: dataPayload.angleY,
+    emg: dataPayload.emg,
+    adc: dataPayload.adc
+  });
+}
+
+// 📱 手機側邊欄
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('active');
+  document.getElementById('sidebarOverlay').classList.toggle('active');
+}
 function closeSidebarMobile() {
   if (window.innerWidth <= 900) {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    sidebar.classList.remove('active');
-    overlay.classList.remove('active');
+    document.getElementById('sidebar').classList.remove('active');
+    document.getElementById('sidebarOverlay').classList.remove('active');
   }
 }
 
-// ================= 個人資料管理與 localStorage 儲存 =================
+// 個人資料管理
 const patientData = JSON.parse(localStorage.getItem('patientData')) || {
-  name: "", age: "", id: "", gender: "", height: "", weight: "", doctor: "", target: "", memo: ""
+  name: "", age: "", id: "1", gender: "", height: "", weight: "", doctor: "", target: "", memo: ""
 };
 
 function renderPatientData() {
   document.getElementById('patient-name').innerText = patientData.name || "—";
   document.getElementById('patient-age').innerText = patientData.age || "—";
-  document.getElementById('patient-id').innerText = patientData.id || "—";
+  document.getElementById('patient-id').innerText = patientData.id || "1";
   document.getElementById('patient-gender').innerText = patientData.gender || "—";
   document.getElementById('patient-height').innerText = patientData.height || "—";
   document.getElementById('patient-weight').innerText = patientData.weight || "—";
 
   document.getElementById('input-name').value = patientData.name || "";
   document.getElementById('input-age').value = patientData.age || "";
-  document.getElementById('input-id').value = patientData.id || "";
+  document.getElementById('input-id').value = patientData.id || "1";
   document.getElementById('input-gender').value = patientData.gender || "";
   document.getElementById('input-height').value = patientData.height || "";
   document.getElementById('input-weight').value = patientData.weight || "";
@@ -814,9 +857,10 @@ function renderPatientData() {
 }
 
 function savePatientForm() {
+  const oldId = patientData.id;
   patientData.name = document.getElementById('input-name').value.trim();
   patientData.age = document.getElementById('input-age').value.trim();
-  patientData.id = document.getElementById('input-id').value.trim();
+  patientData.id = document.getElementById('input-id').value.trim() || "1";
   patientData.gender = document.getElementById('input-gender').value;
   patientData.height = document.getElementById('input-height').value.trim();
   patientData.weight = document.getElementById('input-weight').value.trim();
@@ -826,21 +870,20 @@ function savePatientForm() {
 
   localStorage.setItem('patientData', JSON.stringify(patientData));
   renderPatientData();
+
+  // 若病歷號變更，同步更新 Firebase 監聽器
+  if (oldId !== patientData.id) {
+    loadCloudData();
+  }
+
   alert("🎉 資料已成功儲存並同步更新！");
 }
 
 renderPatientData();
 
-// ================= UI 時間與導覽 =================
 function updateClock() {
   const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const min = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  document.getElementById('live-clock').innerText = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+  document.getElementById('live-clock').innerText = now.toLocaleString();
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -860,13 +903,17 @@ function switchTab(tabId, element) {
   } else if(tabId === 'emg-tab') {
     document.getElementById('current-breadcrumb').innerText = "肌電訊號監測";
     document.getElementById('panel-title').innerText = "ESP32 肌電感測器監測";
-  } else {
+  } else if(tabId === 'pressure-tab') {
     document.getElementById('current-breadcrumb').innerText = "壓力握力監測";
     document.getElementById('panel-title').innerText = "RFP-10010 壓力握力監測";
+  } else if(tabId === 'cloud-tab') {
+    document.getElementById('current-breadcrumb').innerText = "雲端歷史紀錄";
+    document.getElementById('panel-title').innerText = "Firebase 雲端資料庫同步檢視";
+    loadCloudData(); // 開啟雲端頁面時自動讀取
   }
 }
 
-// ================= 圖表初始化 =================
+// 📊 圖表初始化
 const ctxBottle = document.getElementById('rehabChart').getContext('2d');
 const rehabChart = new Chart(ctxBottle, {
   type: 'line',
@@ -896,33 +943,18 @@ const emgChart = new Chart(ctxEmg, {
       pointRadius: 0
     }]
   },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: { y: { min: 0, max: 4095 } },
-    animation: false
-  }
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 4095 } }, animation: false }
 });
 
-// ================= 更新頻率控制邏輯 =================
 let updateInterval = 100;
 let lastUpdateTime = 0;
+function changeUpdateInterval(val) { updateInterval = parseInt(val); }
 
-function changeUpdateInterval(val) {
-  updateInterval = parseInt(val);
-}
-
-// ================= Web Bluetooth 藍牙連線 =================
+// 🔵 藍牙連線
 const BLE_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 const BLE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-
-let bluetoothDevice = null;
-let dataCharacteristic = null;
-
-let isEmgPaused = false;
-let emgDataCounter = 0;
-let emgPeakVal = 0;
-let maxWeight = 0.0, adcOffset = 0, currentRawAdc = 0;
+let bluetoothDevice = null, dataCharacteristic = null;
+let isEmgPaused = false, emgPeakVal = 0, maxWeight = 0.0, adcOffset = 0, currentRawAdc = 0;
 
 async function connectBluetooth() {
   try {
@@ -935,7 +967,6 @@ async function connectBluetooth() {
     });
 
     bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
     const server = await bluetoothDevice.gatt.connect();
     const service = await server.getPrimaryService(BLE_SERVICE_UUID);
     dataCharacteristic = await service.getCharacteristic(BLE_CHARACTERISTIC_UUID);
@@ -946,10 +977,7 @@ async function connectBluetooth() {
     document.getElementById('globalStatusText').innerText = "硬體狀態：🟢 藍牙已連線";
     document.getElementById('globalStatusText').style.color = "#10b981";
     document.getElementById('globalConnectBtn').style.display = "none";
-    document.getElementById('emgRecordTableBody').innerHTML = "";
-
   } catch (error) {
-    console.error("藍牙連線失敗:", error);
     document.getElementById('globalStatusText').innerText = "硬體狀態：🔴 連線失敗/取消";
     document.getElementById('globalStatusText').style.color = "#f43f5e";
   }
@@ -973,13 +1001,20 @@ function handleBLEData(event) {
   };
 
   const now = Date.now();
+
+  // 1. 畫面與圖表更新 (受 updateInterval 控制)
   if (now - lastUpdateTime >= updateInterval) {
     distributeData(payload);
     lastUpdateTime = now;
   }
+
+  // 2. ☁️ 雲端獨立上傳 (完全獨立！只受 CLOUD_UPLOAD_INTERVAL 控制)
+  if (now - lastCloudUploadTime >= CLOUD_UPLOAD_INTERVAL) {
+    uploadToFirebase(payload);
+    lastCloudUploadTime = now;
+  }
 }
 
-// ================= 資料流分發中心 =================
 function distributeData(data) {
   if (data.angleX !== undefined && data.angleY !== undefined) {
     document.getElementById('valX').innerText = data.angleX;
@@ -987,37 +1022,22 @@ function distributeData(data) {
     document.getElementById('bottleStage').style.transform = `rotateX(${-data.angleX}deg) rotateY(${data.angleY + 25}deg)`;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
     rehabChart.data.labels.push(timeStr);
     rehabChart.data.datasets[0].data.push(data.angleX);
     rehabChart.data.datasets[1].data.push(data.angleY);
-
     if (rehabChart.data.labels.length > 20) {
       rehabChart.data.labels.shift();
       rehabChart.data.datasets[0].data.shift();
       rehabChart.data.datasets[1].data.shift();
     }
-
     rehabChart.update('none');
   }
 
-  if (data.emg !== undefined) {
-    handleEMG(data.emg);
-  }
-
-  if (data.adc !== undefined) {
-    handlePressure(data.adc);
-  }
+  if (data.emg !== undefined) handleEMG(data.emg);
+  if (data.adc !== undefined) handlePressure(data.adc);
 }
 
-// ================= 各別資料處理邏輯 =================
 function handleEMG(newValue) {
-  emgDataCounter++;
-  const now = new Date();
-  const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
-
-  addEMGRecordToTable(emgDataCounter, timeStr, newValue);
-
   document.getElementById('emgCurrentVal').innerText = newValue;
   let percent = Math.round((newValue / 4095) * 100);
   document.getElementById('emgPercentVal').innerText = percent;
@@ -1039,42 +1059,16 @@ function handleEMG(newValue) {
 function toggleEMGPause() {
   isEmgPaused = !isEmgPaused;
   const btn = document.getElementById('emgPauseBtn');
-  if (isEmgPaused) {
-    btn.innerText = "恢復即時更新";
-    btn.className = "btn btn-success";
-  } else {
-    btn.innerText = "暫停即時更新";
-    btn.className = "btn btn-warning";
-  }
+  btn.innerText = isEmgPaused ? "恢復即時更新" : "暫停即時更新";
+  btn.className = isEmgPaused ? "btn btn-success" : "btn btn-warning";
 }
-
-function addEMGRecordToTable(id, time, value) {
-  const tableBody = document.getElementById('emgRecordTableBody');
-  const row = document.createElement('tr');
-  row.innerHTML = `
-    <td>#${id}</td>
-    <td>${time}</td>
-    <td style="font-weight: bold; color: var(--card-purple);">${value}</td>
-  `;
-  tableBody.insertBefore(row, tableBody.firstChild);
-  if (tableBody.children.length > 50) {
-    tableBody.removeChild(tableBody.lastChild);
-  }
-}
-
-function resetEMGPeak() {
-  emgPeakVal = 0;
-  document.getElementById('emgPeakVal').innerText = "0";
-}
+function resetEMGPeak() { emgPeakVal = 0; document.getElementById('emgPeakVal').innerText = "0"; }
 
 function handlePressure(rawAdc) {
   currentRawAdc = rawAdc;
-  let calibratedAdc = rawAdc - adcOffset;
-  if (calibratedAdc < 0) calibratedAdc = 0;
-
+  let calibratedAdc = Math.max(0, rawAdc - adcOffset);
   let calibratedVoltage = (calibratedAdc * 3.3) / 4095.0;
-  let currentWeight = (calibratedVoltage / 3.3) * 500.0;
-  if (currentWeight < 0) currentWeight = 0;
+  let currentWeight = Math.max(0, (calibratedVoltage / 3.3) * 500.0);
 
   document.getElementById('adcVal').innerText = calibratedAdc;
   document.getElementById('weightVal').innerText = currentWeight.toFixed(1);
@@ -1094,10 +1088,95 @@ function zeroCalibration() {
   btn.innerText = "✨ 已歸零";
   setTimeout(() => { btn.innerText = "⚖️ 歸零校準"; }, 1200);
 }
+function resetPeak() { maxWeight = 0.0; document.getElementById('peakWeightVal').innerText = "0.0"; }
 
-function resetPeak() {
-  maxWeight = 0.0;
-  document.getElementById('peakWeightVal').innerText = "0.0";
+// ================= ☁️ 雲端資料即時讀取與匯出邏輯 (已修復病歷號對應問題) =================
+let fetchedCloudRecords = [];
+let currentCloudRef = null;
+
+function loadCloudData() {
+  const patientId = patientData.id ? patientData.id.trim() : "1";
+  const tableBody = document.getElementById('cloudRecordTableBody');
+  const statusText = document.getElementById('cloudStatusText');
+
+  statusText.innerText = `⏳ 正在讀取病歷號 [ ${patientId} ] 的資料...`;
+  statusText.style.color = "#ea580c";
+
+  // 關閉舊病歷號的監聽，避免混淆
+  if (currentCloudRef) {
+    currentCloudRef.off();
+  }
+
+  currentCloudRef = database.ref(`rehab_records/${patientId}`);
+
+  // 只監聽特定病歷號的路徑
+  currentCloudRef.on('value', (snapshot) => {
+    tableBody.innerHTML = "";
+    fetchedCloudRecords = [];
+    const data = snapshot.val();
+
+    if (!data) {
+      tableBody.innerHTML = `<tr><td colspan="6" style="color:#94a3b8; text-align:center;">目前雲端資料庫尚無病歷號 [ ${patientId} ] 的紀錄</td></tr>`;
+      statusText.innerText = `✅ 讀取完畢 (0 筆紀錄)`;
+      statusText.style.color = "#10b981";
+      return;
+    }
+
+    Object.keys(data).reverse().forEach(key => {
+      const item = data[key];
+      fetchedCloudRecords.push(item);
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td style="font-weight:600; color:#475569;">${item.dateTime || "—"}</td>
+        <td>${item.patientName || "—"}</td>
+        <td style="color:#4f46e5; font-weight:bold;">${item.angleX ?? 0}°</td>
+        <td style="color:#f43f5e; font-weight:bold;">${item.angleY ?? 0}°</td>
+        <td style="color:#8b5cf6; font-weight:bold;">${item.emg ?? 0}</td>
+        <td style="color:#0ea5e9; font-weight:bold;">${item.adc ?? 0}</td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+    statusText.innerText = `✅ 成功讀取病歷號 [ ${patientId} ] 共 ${fetchedCloudRecords.length} 筆紀錄`;
+    statusText.style.color = "#10b981";
+  });
+}
+
+function exportToCSV() {
+  if (fetchedCloudRecords.length === 0) {
+    alert("⚠️ 目前沒有可匯出的雲端資料！");
+    return;
+  }
+
+  let csvContent = "\uFEFF";
+  csvContent += "時間,病患姓名,X軸角度(度),Y軸角度(度),肌電(EMG),壓力(ADC)\n";
+
+  fetchedCloudRecords.forEach(row => {
+    csvContent += `"${row.dateTime}","${row.patientName}",${row.angleX},${row.angleY},${row.emg},${row.adc}\n`;
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const patientId = patientData.id ? patientData.id.trim() : "1";
+  link.setAttribute("href", url);
+  link.setAttribute("download", `復健數據記錄_病歷號_${patientId}_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function clearCloudData() {
+  const patientId = patientData.id ? patientData.id.trim() : "1";
+  if (confirm(`⚠️ 確定要刪除病歷號 [ ${patientId} ] 在雲端上的所有數據嗎？此動作無法復原！`)) {
+    database.ref(`rehab_records/${patientId}`).remove().then(() => {
+      alert("🗑️ 雲端數據已清空！");
+      loadCloudData();
+    }).catch(err => {
+      alert("❌ 刪除失敗: " + err.message);
+    });
+  }
 }
 </script>
 </body>

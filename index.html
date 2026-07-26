@@ -628,6 +628,9 @@ th {
 
 <!-- 🍼 智慧水瓶分頁 -->
 <div id="bottle-tab" class="tab-content">
+  <div class="control-row">
+    <button class="btn btn-warning" id="bottleZeroBtn" onclick="zeroBottleAngleCalibration()">📐 角度歸零校準</button>
+  </div>
   <div class="cards-row">
     <div class="metric-card">
       <div class="metric-label">前後傾斜 (X 軸)</div>
@@ -733,7 +736,7 @@ th {
     <button class="btn btn-primary" onclick="loadCloudData()">🔄 手動整理雲端數據</button>
     <button class="btn btn-success" onclick="exportToCSV()">📥 匯出為 Excel (CSV)</button>
     <button class="btn btn-danger" onclick="clearCloudData()">🗑️ 清除此患者之雲端資料</button>
-   
+    
     <div style="display: flex; align-items: center; gap: 8px; margin-left: 10px;">
       <label for="cloudIntervalSelectTab" style="font-weight: 700; color: var(--text-muted);">☁️ 上傳頻率：</label>
       <select id="cloudIntervalSelectTab" class="select-interval" onchange="changeCloudInterval(this.value)">
@@ -956,6 +959,10 @@ const BLE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 let bluetoothDevice = null, dataCharacteristic = null;
 let isEmgPaused = false, emgPeakVal = 0, maxWeight = 0.0, adcOffset = 0, currentRawAdc = 0;
 
+// 🍼 角度校準偏移量變數
+let currentRawAngleX = 0, currentRawAngleY = 0;
+let angleOffsetX = 0, angleOffsetY = 0;
+
 async function connectBluetooth() {
   try {
     document.getElementById('globalStatusText').innerText = "硬體狀態：🟡 搜尋裝置中...";
@@ -993,9 +1000,21 @@ function handleBLEData(event) {
   const value = event.target.value;
   if (value.byteLength < 8) return;
 
+  // 讀取 ESP32 原始資料
+  const rawX = value.getInt16(0, true);
+  const rawY = value.getInt16(2, true);
+  
+  // 記錄原始角度
+  currentRawAngleX = rawX;
+  currentRawAngleY = rawY;
+
+  // 計算經過歸零校準後的角度
+  const calibratedX = rawX - angleOffsetX;
+  const calibratedY = rawY - angleOffsetY;
+
   const payload = {
-    angleX: value.getInt16(0, true),
-    angleY: value.getInt16(2, true),
+    angleX: calibratedX,
+    angleY: calibratedY,
     emg: value.getUint16(4, true),
     adc: value.getUint16(6, true)
   };
@@ -1013,6 +1032,16 @@ function handleBLEData(event) {
     uploadToFirebase(payload);
     lastCloudUploadTime = now;
   }
+}
+
+// 🍼 智慧水瓶角度歸零校準
+function zeroBottleAngleCalibration() {
+  angleOffsetX = currentRawAngleX;
+  angleOffsetY = currentRawAngleY;
+
+  const btn = document.getElementById('bottleZeroBtn');
+  btn.innerText = "✨ 角度已歸零";
+  setTimeout(() => { btn.innerText = "📐 角度歸零校準"; }, 1200);
 }
 
 function distributeData(data) {

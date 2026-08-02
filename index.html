@@ -436,8 +436,6 @@ body {
 .btn-success:hover { background-color: #059669; }
 .btn-danger { background-color: #ef4444; }
 .btn-danger:hover { background-color: #dc2626; }
-.btn-line { background-color: #06C755; }
-.btn-line:hover { background-color: #05b34c; transform: translateY(-1px); }
 
 .select-interval {
   padding: 10px 18px;
@@ -563,9 +561,8 @@ th {
 <div class="main-content">
 
 <div class="top-control-panel">
-  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+  <div style="display: flex; align-items: center; gap: 18px;">
     <button class="btn btn-primary" id="globalConnectBtn" onclick="connectBluetooth()">🔵 一鍵連線藍牙裝置</button>
-    <button class="btn btn-line" onclick="sendPatientReportLine()">📱 發送 Line 通報</button>
     <span id="globalStatusText" style="font-weight: 700; color: var(--text-muted); font-size: 0.95rem;">硬體狀態：🔴 尚未連接</span>
   </div>
 
@@ -662,9 +659,8 @@ th {
       </div>
     </div>
 
-    <div style="display: flex; gap: 15px;">
-      <button class="btn btn-primary" onclick="savePatientForm()" style="padding: 12px 20px; font-size: 1rem; flex: 2;">💾 儲存並更新資料</button>
-      <button class="btn btn-line" onclick="sendPatientReportLine()" style="padding: 12px 20px; font-size: 1rem; flex: 1;">📱 發送 Line 報告</button>
+    <div style="text-align: right;">
+      <button class="btn btn-primary" onclick="savePatientForm()" style="padding: 12px 35px; font-size: 1rem; width: 100%;">💾 儲存並更新資料</button>
     </div>
   </div>
 </div>
@@ -824,56 +820,6 @@ th {
 </div>
 
 <script>
-// ================= 📱 Line Notify API 設定 =================
-const LINE_BEARER_TOKEN = "KXX8rai0J71twse-MISxHGnn_COktTRi";
-
-async function sendLineNotification(messageText, isMarkdown = true) {
-  try {
-    const response = await fetch("https://v2.chateverywhere.app/api/line/notify", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LINE_BEARER_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        message: messageText,
-        markdown: isMarkdown
-      })
-    });
-
-    if (response.ok) {
-      alert("✅ Line 訊息發送成功！");
-    } else {
-      alert("❌ Line 發送失敗，HTTP 狀態碼：" + response.status);
-    }
-  } catch (error) {
-    console.error("Line API 發送失敗:", error);
-    alert("❌ 發送失敗，請確認網路連線！");
-  }
-}
-
-function sendPatientReportLine() {
-  const name = patientData.name || "未填寫";
-  const id = patientData.id || "1";
-  const target = patientData.target || "未設定";
-  const doctor = patientData.doctor || "未指定";
-  const currentX = document.getElementById('valX').innerText;
-  const currentY = document.getElementById('valY').innerText;
-  const emgPeak = document.getElementById('emgPeakVal').innerText;
-  const weightPeak = document.getElementById('peakWeightVal').innerText;
-
-  const markdownMsg = `# 🏥 患者復健數據即時通報\n` +
-    `- **患者姓名**: ${name} (病歷號: \`${id}\`)\n` +
-    `- **主治醫師**: ${doctor}\n` +
-    `- **目標角度**: ${target}°\n` +
-    `- **即時手腕角度**: X: \`${currentX}°\` / Y: \`${currentY}°\`\n` +
-    `- **肌電峰值**: \`${emgPeak}\` / 4095\n` +
-    `- **最大握力重量**: \`${weightPeak}\` g\n` +
-    `- **發送時間**: *${new Date().toLocaleString()}*`;
-
-  sendLineNotification(markdownMsg, true);
-}
-
 // ================= ☁️ Firebase 初始化設定 =================
 const firebaseConfig = {
   apiKey: "AIzaSyC3VvI4_4wkzbo6ps4Xk9XgThMPd1uQG6Y",

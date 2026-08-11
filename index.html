@@ -561,8 +561,10 @@ th {
 <div class="main-content">
 
 <div class="top-control-panel">
-  <div style="display: flex; align-items: center; gap: 18px;">
+  <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
     <button class="btn btn-primary" id="globalConnectBtn" onclick="connectBluetooth()">🔵 一鍵連線藍牙裝置</button>
+    <!-- 📤 發送 LINE 報告按鈕 -->
+    <button class="btn btn-success" onclick="sendManualReport()">📤 發送當下報表至 LINE</button>
     <span id="globalStatusText" style="font-weight: 700; color: var(--text-muted); font-size: 0.95rem;">硬體狀態：🔴 尚未連接</span>
   </div>
 
@@ -612,8 +614,8 @@ th {
 <!-- 🏠 系統首頁 -->
 <div id="home-tab" class="tab-content active">
   <div class="home-container">
-    <h3>📝 填寫個人基本資料</h3>
-    <p>請輸入病患或受測者的基本資訊，系統將會自動將這些資料同步帶入上方面板及所有監測紀錄中。</p>
+    <h3>📝 填寫個人基本資料與 LINE 設定</h3>
+    <p>請輸入病患基本資訊及您的 LINE Notify Token，系統會自動儲存並套用至即時發送功能中。</p>
 
     <div class="form-grid">
       <div class="form-group">
@@ -653,6 +655,11 @@ th {
         <label for="input-target">訓練目標角度 (度)</label>
         <input type="number" id="input-target" placeholder="例如：45">
       </div>
+      <!-- 📱 Line Token 輸入欄位 -->
+      <div class="form-group full-width">
+        <label for="input-linetoken">💬 Line Notify Token (自訂)</label>
+        <input type="text" id="input-linetoken" placeholder="請在此貼上您的 Line Token...">
+      </div>
       <div class="form-group full-width">
         <label for="input-memo">復健備註 / 診斷說明</label>
         <textarea id="input-memo" rows="3" placeholder="請填寫此患者的診斷備註、手部復健重點..."></textarea>
@@ -665,7 +672,7 @@ th {
   </div>
 </div>
 
-<!-- 🍼 智慧水瓶分頁 (預設加上 chart-collapsed Class) -->
+<!-- 🍼 智慧水瓶分頁 -->
 <div id="bottle-tab" class="tab-content chart-collapsed">
   <div class="control-row">
     <button class="btn btn-warning" id="bottleZeroBtn" onclick="zeroBottleAngleCalibration()">📐 角度歸零校準</button>
@@ -701,7 +708,6 @@ th {
         <div class="bottle-face face-back"></div>
       </div>
     </div>
-    <!-- 預設隱藏 (display: none;) -->
     <div class="chart-section" id="bottleChartContainer" style="display: none;">
       <canvas id="rehabChart"></canvas>
     </div>
@@ -836,10 +842,9 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
 let lastCloudUploadTime = 0;
-let CLOUD_UPLOAD_INTERVAL = 1000; // 預設 1000ms (1秒) 上傳一次
+let CLOUD_UPLOAD_INTERVAL = 1000;
 let currentActiveTab = 'home-tab';
 
-// 動態修改雲端上傳頻率 (雙向同步選單)
 function changeCloudInterval(val) {
   CLOUD_UPLOAD_INTERVAL = parseInt(val);
   document.getElementById('cloudIntervalSelectHeader').value = val;
@@ -864,7 +869,6 @@ function uploadToFirebase(dataPayload) {
   });
 }
 
-// 📱 手機側邊欄
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('active');
   document.getElementById('sidebarOverlay').classList.toggle('active');
@@ -876,9 +880,10 @@ function closeSidebarMobile() {
   }
 }
 
-// 個人資料管理
+// 個人資料與 Token 管理
 const patientData = JSON.parse(localStorage.getItem('patientData')) || {
-  name: "", age: "", id: "1", gender: "", height: "", weight: "", doctor: "", target: "", memo: ""
+  name: "", age: "", id: "1", gender: "", height: "", weight: "", doctor: "", target: "", memo: "",
+  lineToken: "KXX8rai0J71twse-MISxHGnn_COktTRi"
 };
 
 function renderPatientData() {
@@ -898,6 +903,7 @@ function renderPatientData() {
   document.getElementById('input-doctor').value = patientData.doctor || "";
   document.getElementById('input-target').value = patientData.target || "";
   document.getElementById('input-memo').value = patientData.memo || "";
+  document.getElementById('input-linetoken').value = patientData.lineToken || "KXX8rai0J71twse-MISxHGnn_COktTRi";
 
   document.getElementById('targetValDisplay').innerText = patientData.target || "—";
 }
@@ -913,6 +919,9 @@ function savePatientForm() {
   patientData.doctor = document.getElementById('input-doctor').value.trim();
   patientData.target = document.getElementById('input-target').value.trim();
   patientData.memo = document.getElementById('input-memo').value.trim();
+  
+  const tokenInput = document.getElementById('input-linetoken').value.trim();
+  patientData.lineToken = tokenInput || "KXX8rai0J71twse-MISxHGnn_COktTRi";
 
   localStorage.setItem('patientData', JSON.stringify(patientData));
   renderPatientData();
@@ -921,7 +930,7 @@ function savePatientForm() {
     loadCloudData();
   }
 
-  alert("🎉 資料已成功儲存並同步更新！");
+  alert("🎉 資料與 Line Token 已成功儲存並同步更新！");
 }
 
 renderPatientData();
@@ -1002,7 +1011,6 @@ const BLE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 let bluetoothDevice = null, dataCharacteristic = null;
 let isEmgPaused = false, emgPeakVal = 0, maxWeight = 0.0, adcOffset = 0, currentRawAdc = 0;
 
-// 🍼 角度校準偏移量變數
 let currentRawAngleX = 0, currentRawAngleY = 0;
 let angleOffsetX = 0, angleOffsetY = 0;
 
@@ -1022,8 +1030,6 @@ async function connectBluetooth() {
     dataCharacteristic = await service.getCharacteristic(BLE_CHARACTERISTIC_UUID);
 
     await dataCharacteristic.startNotifications();
-    
-    // 💡 避免重複註冊事件
     dataCharacteristic.removeEventListener('characteristicvaluechanged', handleBLEData);
     dataCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
 
@@ -1064,20 +1070,17 @@ function handleBLEData(event) {
 
   const now = Date.now();
 
-  // 1. 畫面與圖表更新 (受 updateInterval 控制)
   if (now - lastUpdateTime >= updateInterval) {
     distributeData(payload);
     lastUpdateTime = now;
   }
 
-  // 2. ☁️ 雲端獨立上傳
   if (now - lastCloudUploadTime >= CLOUD_UPLOAD_INTERVAL) {
     uploadToFirebase(payload);
     lastCloudUploadTime = now;
   }
 }
 
-// 🍼 智慧水瓶角度歸零校準
 function zeroBottleAngleCalibration() {
   angleOffsetX = currentRawAngleX;
   angleOffsetY = currentRawAngleY;
@@ -1087,7 +1090,6 @@ function zeroBottleAngleCalibration() {
   setTimeout(() => { btn.innerText = "📐 角度歸零校準"; }, 1200);
 }
 
-// 📈 切換智慧水瓶圖表顯示/隱藏
 function toggleBottleChart() {
   const chartContainer = document.getElementById('bottleChartContainer');
   const bottleTab = document.getElementById('bottle-tab');
@@ -1144,7 +1146,6 @@ function handleEMG(newValue) {
     document.getElementById('emgPeakVal').innerText = emgPeakVal;
   }
 
-  // 💡 只有在切換到 EMG 分頁且未暫停時才繪製圖表，大幅節省效能
   if (!isEmgPaused && currentActiveTab === 'emg-tab') {
     const chartData = emgChart.data.datasets[0].data;
     chartData.push(newValue);
@@ -1203,7 +1204,6 @@ function loadCloudData() {
     currentCloudRef.off();
   }
 
-  // 💡 畫面讀取：限制只載入最新的 100 筆，保障流暢度
   currentCloudRef = database.ref(`rehab_records/${patientId}`).limitToLast(100);
 
   currentCloudRef.on('value', (snapshot) => {
@@ -1239,7 +1239,6 @@ function loadCloudData() {
   });
 }
 
-// 💡 獨立下載完整 Excel：單次向 Firebase 抓取該病歷號的全量歷史數據
 async function exportToCSV() {
   const patientId = patientData.id ? patientData.id.trim() : "1";
   const statusText = document.getElementById('cloudStatusText');
@@ -1257,7 +1256,7 @@ async function exportToCSV() {
       return;
     }
 
-    let csvContent = "\uFEFF"; // BOM 控制 UTF-8，防止 Excel 中文亂碼
+    let csvContent = "\uFEFF";
     csvContent += "時間,病患姓名,X軸角度(度),Y軸角度(度),肌電(EMG),壓力(ADC)\n";
 
     let totalCount = 0;
@@ -1293,6 +1292,34 @@ function clearCloudData() {
     }).catch(err => {
       alert("❌ 刪除失敗: " + err.message);
     });
+  }
+}
+
+// ================= 📤 發送 LINE 報告 (改用標準 Fetch 請求，支援本地檔案直接發送) =================
+async function sendManualReport() {
+  const pName = patientData.name || "未設定";
+  const x = document.getElementById('valX').innerText;
+  const y = document.getElementById('valY').innerText;
+  const emg = document.getElementById('emgCurrentVal').innerText;
+  const adc = document.getElementById('adcVal').innerText;
+
+  const messageText = `[復健即時報告] 患者: ${pName} | 時間: ${new Date().toLocaleTimeString()} | 角度: X=${x}°, Y=${y}° | 肌電: ${emg} | 壓力: ${adc}`;
+  
+  // 取得自訂 Token
+  const tokenInputElem = document.getElementById('input-linetoken');
+  const token = (tokenInputElem && tokenInputElem.value.trim() !== "") 
+                ? tokenInputElem.value.trim() 
+                : (patientData.lineToken || "KXX8rai0J71twse-MISxHGnn_COktTRi");
+  
+  const targetUrl = `https://v2.chateverywhere.app/api/line/notify?token=${token}&message=${encodeURIComponent(messageText)}`;
+
+  try {
+    // 使用 fetch 進行背景請求，確保能確實發送出去
+    const response = await fetch(targetUrl, { method: 'GET', mode: 'no-cors' });
+    alert("✅ 報告已成功發送至 LINE！");
+  } catch (error) {
+    console.error("LINE 發送失敗：", error);
+    alert("❌ 發送失敗，請檢查網路連線或 Token 是否正確。");
   }
 }
 </script>

@@ -698,7 +698,7 @@ th {
 
 <div class="top-control-panel">
   <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
-    <button class="btn btn-primary" id="globalConnectBtn" onclick="connectBluetooth()">🔵 一鍵連線藍牙裝置</button>
+    <button class="btn btn-primary" id="globalConnectBtn" onclick="connectBluetooth()">🔵 一鍵連線藍芽裝置</button>
     <button class="btn btn-success" onclick="sendManualReport()">📤 發送當下報表至 LINE</button>
     <span id="globalStatusText" style="font-weight: 700; color: var(--text-muted); font-size: 0.95rem;">硬體狀態：🔴 尚未連接</span>
   </div>
@@ -1087,6 +1087,9 @@ let lastCloudUploadTime = 0;
 let CLOUD_UPLOAD_INTERVAL = 1000;
 let currentActiveTab = 'home-tab';
 
+// 記錄進入 TFCC 宇宙前，藍芽是否處於連線狀態
+let wasBluetoothConnectedBeforeTFCC = false;
+
 // ================= 🔊 Web Audio 音效 =================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -1466,15 +1469,40 @@ setInterval(updateClock, 1000);
 updateClock();
 
 function switchTab(tabId, element) {
+  const previousTab = currentActiveTab;
   currentActiveTab = tabId;
+ 
   document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   element.classList.add('active');
 
+  // 離開封包與遊戲專屬動畫機制
   if (tabId !== 'game-tab' && gameAnimationId) {
     cancelAnimationFrame(gameAnimationId);
     gameAnimationId = null;
+  }
+
+  // 🪐 【自動斷開與提醒重新連接藍芽 logic】
+  if (tabId === 'tfcc-game-tab') {
+    // 進入 TFCC 分頁：檢查藍芽狀態
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+      wasBluetoothConnectedBeforeTFCC = true;
+      disconnectBluetooth();
+      alert("🪐 已進入『TFCC 復健宇宙』！\n系統已為您自動主動斷開藍芽連線，請使用視覺鏡頭進行遊戲體驗。");
+    } else {
+      wasBluetoothConnectedBeforeTFCC = false;
+    }
+  } else if (previousTab === 'tfcc-game-tab') {
+    // 離開 TFCC 分頁：提醒重新連接
+    if (wasBluetoothConnectedBeforeTFCC && (!bluetoothDevice || !bluetoothDevice.gatt.connected)) {
+      wasBluetoothConnectedBeforeTFCC = false;
+      setTimeout(() => {
+        if (confirm("🔗 您已離開『TFCC 復健宇宙』，是否重新連接藍芽裝置以繼續監測？")) {
+          connectBluetooth();
+        }
+      }, 200);
+    }
   }
 
   if(tabId === 'home-tab') {
@@ -1552,7 +1580,7 @@ let updateInterval = 100;
 let lastUpdateTime = 0;
 function changeUpdateInterval(val) { updateInterval = parseInt(val); }
 
-// BLE 連線
+// BLE 連線控制
 const BLE_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 const BLE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 let bluetoothDevice = null, dataCharacteristic = null;
@@ -1580,7 +1608,7 @@ async function connectBluetooth() {
     dataCharacteristic.removeEventListener('characteristicvaluechanged', handleBLEData);
     dataCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
 
-    document.getElementById('globalStatusText').innerText = "硬體狀態：🟢 藍牙已連線";
+    document.getElementById('globalStatusText').innerText = "硬體狀態：🟢 藍芽已連線";
     document.getElementById('globalStatusText').style.color = "#10b981";
     document.getElementById('globalConnectBtn').style.display = "none";
   } catch (error) {
@@ -1589,8 +1617,15 @@ async function connectBluetooth() {
   }
 }
 
+// 主動斷開藍芽連線函式
+function disconnectBluetooth() {
+  if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+    bluetoothDevice.gatt.disconnect();
+  }
+}
+
 function onDisconnected() {
-  document.getElementById('globalStatusText').innerText = "硬體狀態：🔴 藍牙已斷開連線";
+  document.getElementById('globalStatusText').innerText = "硬體狀態：🔴 藍芽已斷開連線";
   document.getElementById('globalStatusText').style.color = "#f43f5e";
   document.getElementById('globalConnectBtn').style.display = "inline-block";
 }
@@ -1668,7 +1703,7 @@ function distributeData(data) {
     if (currentActiveTab === 'game-tab') {
       updateGamePhysics(data.angleX, data.angleY);
     }
-    
+   
     if (currentActiveTab === 'tfcc-game-tab') {
       window.handInput.x = data.angleY * 0.2;
       window.handInput.y = -data.angleX * 0.2;
@@ -2050,487 +2085,151 @@ window.initGameObjects = function() {
         scene.add(window.playerGroup);
 
         window.targetMesh = new THREE.Group();
-        window.targetMesh.add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12), new THREE.MeshPhongMaterial({ color: 0xffffff })));
+        window.targetMesh.add(new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshPhongMaterial({ color: 0xffffff, wireframe: true })));
         scene.add(window.targetMesh);
-
-        buildFootballGoal();
-        resetFootball();
+        resetFootballPositions();
     }
 };
 
-function spawnStarsBackground() {
-    for (let i = 0; i < 45; i++) {
-        let star = new THREE.Mesh(new THREE.OctahedronGeometry(0.15), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 }));
-        star.position.set((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 10, 0);
-        scene.add(star); backgroundStars.push(star);
-    }
+function updateButtonAvailability() {
+    // 按鈕控制狀態可於此處延伸
+}
+
+function updateHighScoreDisplay() {
+    let curMax = 0;
+    if (window.currentGameMode === 'default') curMax = rocketMaxCombo;
+    else if (window.currentGameMode === 'baseball') curMax = baseballMaxCombo;
+    else if (window.currentGameMode === 'football') curMax = footballMaxCombo;
+
+    highScoreVal.innerText = `👑 最高 Combo: ${curMax}`;
 }
 
 function updateEnergyBar() {
     energyBar.style.width = `${starEnergy}%`;
-    if (starEnergy >= 100) {
-        energyText.innerText = "⚡ 能量滿！請「五指握拳」發射光波！";
-        energyBar.style.background = "linear-gradient(90deg, #ff0055, #ffcc00)";
-    } else {
-        energyText.innerText = `光波能量: ${starEnergy}%`;
-        energyBar.style.background = "linear-gradient(90deg, #00ffff, #00ff55)";
+    energyText.innerText = `能量收集中: ${Math.round(starEnergy)}%`;
+}
+
+function spawnStarsBackground() {
+    for (let i = 0; i < 60; i++) {
+        const star = new THREE.Mesh(
+            new THREE.SphereGeometry(0.04, 4, 4),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        star.position.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 20, -5 - Math.random() * 10);
+        scene.add(star);
+        backgroundStars.push(star);
     }
-}
-
-function updateHighScoreDisplay() {
-    let record = getRecordOfCurrentMode();
-    highScoreVal.innerText = `👑 最高 Combo: ${record}`;
-}
-
-function getRecordOfCurrentMode() {
-    if (window.currentGameMode === 'default') return rocketMaxCombo;
-    if (window.currentGameMode === 'baseball') return baseballMaxCombo;
-    if (window.currentGameMode === 'football') return footballMaxCombo;
-    return 0;
-}
-
-function handleComboScore(pointsGained = 1) {
-    let oldRecord = getRecordOfCurrentMode();
-    window.comboCount += pointsGained;
-    comboVal.innerText = `${window.comboCount} Combo`;
-
-    if (window.comboCount > oldRecord) {
-        window.isBreakingRecord = true;
-        updateNewRecord(window.comboCount);
-        updateHighScoreDisplay();
-    }
-
-    if (window.isBreakingRecord) {
-        highScoreVal.classList.add('record-breaking');
-        triggerLimitBreakEffect();
-    } else {
-        highScoreVal.classList.remove('record-breaking');
-        screenOverlay.className = "";
-    }
-}
-
-function updateNewRecord(newVal) {
-    if (window.currentGameMode === 'default') {
-        rocketMaxCombo = newVal; localStorage.setItem('rocket_max_combo', rocketMaxCombo);
-    } else if (window.currentGameMode === 'baseball') {
-        baseballMaxCombo = newVal; localStorage.setItem('baseball_max_combo', baseballMaxCombo);
-    } else if (window.currentGameMode === 'football') {
-        footballMaxCombo = newVal; localStorage.setItem('football_max_combo', footballMaxCombo);
-    }
-}
-
-function triggerLimitBreakEffect() {
-    screenOverlay.classList.remove('limit-break');
-    void screenOverlay.offsetWidth;
-    screenOverlay.classList.add('limit-break');
-   
-    let count = 0;
-    let shake = setInterval(() => {
-        camera.position.x = (Math.random() - 0.5) * 0.25;
-        camera.position.y = (Math.random() - 0.5) * 0.25;
-        count++;
-        if (count > 6) {
-            clearInterval(shake);
-            camera.position.set(0, 0, 15);
-        }
-    }, 50);
-
-    let effectPos = window.targetMesh ? window.targetMesh.position : new THREE.Vector3(0,0,0);
-    triggerHitParticles(effectPos, 0x00ffcc, 40);
-}
-
-function resetCombo() {
-    window.comboCount = 0;
-    window.isBreakingRecord = false;
-    comboVal.innerText = "0 Combo";
-    highScoreVal.classList.remove('record-breaking');
-    screenOverlay.classList.remove('limit-break');
-    screenOverlay.classList.remove('blue-lock-storm');
-    updateHighScoreDisplay();
-}
-
-function launchKamehameha() {
-    if (isKamehamehaActive) return;
-    isKamehamehaActive = true;
-    starEnergy = 0;
-    updateEnergyBar();
-
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 25, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.95 }));
-    beam.rotation.z = -Math.PI / 2;
-    beam.position.set(window.playerMesh.position.x + 12, window.playerMesh.position.y, 0);
-    scene.add(beam);
-   
-    triggerHitParticles(window.playerMesh.position, 0x00ffff, 40);
-    triggerGoalAlert("🔥 光波爆裂發射！");
-
-    setTimeout(() => {
-        let py = window.playerMesh.position.y;
-
-        if (currentPlanet && Math.abs(currentPlanet.position.y - py) < 2.0) {
-            triggerHitParticles(currentPlanet.position, 0xff3300, 60);
-           
-            let comboAdd = 8;
-            if (window.currentGameSpeed < 0.1) { comboAdd = 4; }
-            else if (window.currentGameSpeed > 0.2) { comboAdd = 12; }
-
-            triggerGoalAlert(`🪐 星球大爆炸!\n+${comboAdd} Combo`);
-            handleComboScore(comboAdd);
-            spawnRandomPlanet();
-        }
-
-        if (window.targetMesh && Math.abs(window.targetMesh.position.y - py) < 1.5) {
-            triggerHitParticles(window.targetMesh.position, 0x00ff55, 30);
-           
-            handleComboScore(2);
-            window.targetMesh.position.set(10, (Math.random() - 0.5) * 5, 0);
-        }
-    }, 200);
-
-    let fade = setInterval(() => {
-        beam.material.opacity -= 0.12;
-        beam.scale.y += 0.08;
-        if (beam.material.opacity <= 0) { scene.remove(beam); clearInterval(fade); isKamehamehaActive = false; }
-    }, 50);
 }
 
 function spawnRandomPlanet() {
-    if (currentPlanet) { scene.remove(currentPlanet); }
-    currentPlanet = new THREE.Mesh(new THREE.SphereGeometry(1.2, 24, 24), new THREE.MeshPhongMaterial({ color: 0xe65c00, roughness: 0.6 }));
-    currentPlanet.position.set(12, (Math.random() - 0.5) * 6, 0);
+    if (currentPlanet) scene.remove(currentPlanet);
+    currentPlanet = new THREE.Mesh(
+        new THREE.SphereGeometry(1.2, 16, 16),
+        new THREE.MeshPhongMaterial({ color: 0x3366cc })
+    );
+    currentPlanet.position.set(12, (Math.random() - 0.5) * 8, -2);
     scene.add(currentPlanet);
 }
 
 function resetBaseballPositions() {
-    if (!window.targetMesh) return;
-    window.targetMesh.userData = { hit: false, vx: 0, vy: 0 };
-    let startPos = new THREE.Vector3(), targetPos = new THREE.Vector3();
-    if (window.currentRotation === 90) {
-        let startFromTop = Math.random() > 0.5;
-        startPos.set((Math.random() - 0.5) * 6, startFromTop ? 6 : -6, 0);
-        targetPos.set((Math.random() - 0.5) * 6, startFromTop ? -6 : 6, 0);
-        window.playerGroup.position.set(0, startFromTop ? -3.5 : 3.5, 0);
-    } else {
-        startPos.set(8, (Math.random() - 0.5) * 5, 0);
-        targetPos.set(-8, (Math.random() - 0.5) * 5, 0);
-        window.playerGroup.position.set(-5.5, 0, 0);
-    }
-    window.targetMesh.position.copy(startPos);
-    window.targetMesh.userData.direction = new THREE.Vector3().subVectors(targetPos, startPos).normalize();
-    rawLinePoints = [startPos.clone(), targetPos.clone()];
-    triggerWaveEffect(window.targetMesh.position, 0x00ffcc);
-}
-
-function buildFootballGoal() {
-    if(window.soccerNet) scene.remove(window.soccerNet);
-    window.soccerNet = new THREE.Group();
-    window.goalFrame = new THREE.Group();
-   
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 8), new THREE.MeshPhongMaterial({ color: 0x00ffff }));
-    const cross = post.clone(); cross.rotation.z = Math.PI/2; cross.position.y = 2.5;
-    const lPost = post.clone(); lPost.position.set(-2.5, 0, 0);
-    const rPost = post.clone(); rPost.position.set(2.5, 0, 0);
-    window.goalFrame.add(cross, lPost, rPost);
-   
-    window.goalFrame.position.set(window.currentRotation === 45 ? -5 : -6, window.currentRotation === 45 ? 2.5 : 0, 0);
-    window.soccerNet.add(window.goalFrame); scene.add(window.soccerNet);
-}
-
-function resetFootball() {
-    window.targetMesh.position.set(2 + Math.random() * 3, (Math.random() - 0.5) * 4, 0);
-    window.targetMesh.userData = { kicked: false, vx: 0, vy: 0 };
-    triggerWaveEffect(window.targetMesh.position, 0x00ffff);
-}
-
-function updateFootballScoreUI() {
-    playerScoreEl.innerText = window.footballPlayerScore; cpuScoreEl.innerText = window.footballCpuScore;
-}
-
-window.updateGameLoop = function() {
-    window.wristSpeed = Math.abs(window.wristRotation - window.lastWristRotation);
-    window.lastWristRotation = window.wristRotation;
-
-    for (let i = waveRings.length - 1; i >= 0; i--) { waveRings[i].scale.addScalar(0.08); waveRings[i].material.opacity -= 0.04; if (waveRings[i].material.opacity <= 0) { scene.remove(waveRings[i]); waveRings.splice(i, 1); } }
-    for (let i = flameParticles.length - 1; i >= 0; i--) { flameParticles[i].position.add(flameParticles[i].userData.velocity); flameParticles[i].scale.multiplyScalar(0.92); if (flameParticles[i].material.opacity <= 0) scene.remove(flameParticles[i]); }
-    for (let i = particles.length - 1; i >= 0; i--) { particles[i].position.add(particles[i].userData.velocity); particles[i].material.opacity -= 0.03; if (particles[i].material.opacity <= 0) { scene.remove(particles[i]); particles.splice(i, 1); } }
-
-    if (window.currentGameMode === 'default') {
-        window.playerMesh.position.y += (window.handInput.y - window.playerMesh.position.y) * 0.15;
-        window.playerMesh.position.x += (window.handInput.x - window.playerMesh.position.x) * 0.15;
-       
-        window.targetMesh.position.x -= window.currentGameSpeed * 1.1;
-
-        backgroundStars.forEach(star => {
-            if (window.playerMesh.position.distanceTo(star.position) < 1.6) {
-                triggerHitParticles(star.position, 0x00ffff, 5);
-                star.position.set((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 10, 0);
-                if (starEnergy < 100) {
-                    starEnergy = Math.min(starEnergy + 12, 100);
-                    updateEnergyBar();
-                }
-            }
-        });
-
-        if (starEnergy >= 100 && window.isFist) {
-            launchKamehameha();
-        }
-
-        if (currentPlanet) {
-            currentPlanet.position.x -= window.currentGameSpeed * 0.7;
-            if (window.playerMesh.position.distanceTo(currentPlanet.position) < 1.8) {
-                resetCombo();
-                spawnRandomPlanet();
-                triggerGoalAlert("💥 撞上星球！\nCombo 歸零！");
-            }
-            if (currentPlanet.position.x < -10) spawnRandomPlanet();
-        }
-
-        if (window.targetMesh.position.x < -10) {
-            window.targetMesh.position.set(10, (Math.random() - 0.5) * 5, 0);
-        }
-
-        if (window.playerMesh.position.distanceTo(window.targetMesh.position) < 1.5) {
-            handleComboScore(1);
-            window.targetMesh.position.set(10, (Math.random() - 0.5) * 5, 0);
-        }
-
-    } else if (window.currentGameMode === 'baseball') {
-        if (window.currentRotation === 90) window.playerGroup.position.x += (window.handInput.x - window.playerGroup.position.x) * 0.2;
-        else window.playerGroup.position.y += (window.handInput.y - window.playerGroup.position.y) * 0.2;
-
-        window.playerGroup.rotation.z = window.wristRotation;
-
-        if (window.comboCount > 0) emitBatFire();
-
-        let ballData = window.targetMesh.userData;
-        if (!ballData.hit) {
-            if (ballData.direction) window.targetMesh.position.addScaledVector(ballData.direction, window.currentGameSpeed * 1.5);
-            if (rawLinePoints.length === 2) { trajectoryLine.geometry.setFromPoints([window.targetMesh.position, rawLinePoints[1]]); }
-           
-            if (window.targetMesh.position.x < -10 || Math.abs(window.targetMesh.position.y) > 7) {
-                resetCombo();
-                resetBaseballPositions();
-            }
-
-            if (window.playerGroup.position.distanceTo(window.targetMesh.position) < 2.5) {
-                if (window.wristSpeed > 0.05) {
-                    ballData.hit = true;
-                   
-                    triggerGoalAlert("⚾ 全壘打揮擊！");
-                    let factor = 20 + Math.min(window.comboCount * 8, 60);
-                    triggerHitParticles(window.targetMesh.position, 0xff3300, factor);
-
-                    handleComboScore(1);
-
-                    ballData.vx = 0.5; ballData.vy = (Math.random() - 0.5) * 0.4;
-                } else {
-                    wristVal.innerText = "⚠️ 碰到了！請快速轉動手腕揮棒！";
-                    wristVal.style.color = "#ff3336";
-                }
-            }
-        } else {
-            window.targetMesh.position.x += ballData.vx; window.targetMesh.position.y += ballData.vy;
-            if (Math.abs(window.targetMesh.position.x) > 12) resetBaseballPositions();
-        }
-
-    } else if (window.currentGameMode === 'football') {
-        window.playerGroup.position.y += (window.handInput.y - window.playerGroup.position.y) * 0.15;
-        window.playerGroup.position.x += (window.handInput.x - window.playerGroup.position.x) * 0.15;
-       
-        window.playerGroup.rotation.z = 0;
-
-        let ballData = window.targetMesh.userData;
-
-        if (!ballData.kicked) {
-            const footWorldPos = new THREE.Vector3();
-            window.footballFoot.getWorldPosition(footWorldPos);
-            let distanceToFoot = footWorldPos.distanceTo(window.targetMesh.position);
-
-            if (distanceToFoot < 1.0) {
-                ballData.kicked = true;
-
-                if (footWorldPos.x > window.targetMesh.position.x) {
-                    ballData.vx = -0.55;
-                    ballData.vy = (window.targetMesh.position.y - footWorldPos.y) * 0.4;
-                    triggerGoalAlert("⚽ 往左爆射！");
-                } else {
-                    ballData.vx = 0.55;
-                    ballData.vy = (window.targetMesh.position.y - footWorldPos.y) * 0.4;
-                    triggerGoalAlert("⚽ 往右開球！");
-                }
-
-                triggerHitParticles(window.targetMesh.position, 0x00ffff, 25);
-                screenOverlay.classList.add('blue-lock-storm');
-            }
-        }
-
-        if (ballData.kicked) {
-            window.targetMesh.position.x += ballData.vx;
-            window.targetMesh.position.y += ballData.vy;
-
-            if (window.targetMesh.position.x <= -6.0) {
-                if (window.targetMesh.position.y >= -2.5 && window.targetMesh.position.y <= 2.5) {
-                    window.footballPlayerScore++;
-                    updateFootballScoreUI();
-                    triggerGoalAlert("🥅 GOAL!!! 絕妙破網！");
-                   
-                    handleComboScore(1);
-                } else {
-                    resetCombo();
-                    window.footballCpuScore++;
-                    updateFootballScoreUI();
-                    triggerGoalAlert("❌ 射偏了！沒對準球門！");
-                }
-                screenOverlay.classList.remove('blue-lock-storm');
-                resetFootball();
-            }
-            else if (Math.abs(window.targetMesh.position.x) > 10 || Math.abs(window.targetMesh.position.y) > 7) {
-                resetCombo();
-                window.footballCpuScore++;
-                updateFootballScoreUI();
-                triggerGoalAlert("❌ 飛出界外！");
-                screenOverlay.classList.remove('blue-lock-storm');
-                resetFootball();
-            }
-        }
-    }
-};
-
-function triggerGoalAlert(txt) {
-    goalAlert.innerText = txt; goalAlert.classList.add('show');
-    setTimeout(() => goalAlert.classList.remove('show'), 1200);
-}
-
-function triggerWaveEffect(pos, colorHex) {
-    let ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.6, 16), new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.8 }));
-    ring.position.copy(pos); scene.add(ring); waveRings.push(ring);
+    window.playerGroup.position.set(-6, -3, 0);
+    window.targetMesh.position.set(8, (Math.random() - 0.5) * 4, 0);
 }
 
 function updateFootballBackground() {
-    if (window.currentGameMode !== 'football') return;
-    scene.background = new THREE.Color(`rgb(${5 + Math.min(window.comboCount * 15, 100)}, 12, 35)`);
+    scene.background = new THREE.Color(0x051026);
 }
 
-function emitBatFire() {
-    let angle = window.playerGroup.rotation.z;
-    for(let i = 0; i < 5; i++) {
-        let p = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff4500, transparent: true, opacity: 0.8 }));
-        let offset = (Math.random() - 0.5) * 2.5;
-        p.position.set(
-            window.playerGroup.position.x - offset * Math.sin(angle),
-            window.playerGroup.position.y + offset * Math.cos(angle),
-            0
-        );
-        p.userData = { velocity: new THREE.Vector3((Math.random()-0.5)*0.02, 0.04, 0) };
-        scene.add(p); flameParticles.push(p);
-    }
+function updateFootballScoreUI() {
+    playerScoreEl.innerText = window.footballPlayerScore;
+    cpuScoreEl.innerText = window.footballCpuScore;
 }
 
-function triggerHitParticles(pos, colorHex, count) {
-    for (let i = 0; i < count; i++) {
-        let p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 1 }));
-        p.position.copy(pos);
-        p.userData = { velocity: new THREE.Vector3((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.1) };
-        scene.add(p); particles.push(p);
-    }
+function resetFootballPositions() {
+    window.playerGroup.position.set(-5, -2, 0);
+    window.targetMesh.position.set(6, 0, 0);
 }
 
-function changeMode(mode, btn) {
+window.changeMode = function(mode, btn) {
     window.currentGameMode = mode;
-    updateBtnActive(btn);
-    window.currentRotation = 0;
-    canvasContainer.style.transform = `rotate(0deg)`;
-    window.footballPlayerScore = 0;
-    window.footballCpuScore = 0;
-    resetCombo();
-    window.initGameObjects();
-}
-
-function changeSpeed(speed, btn) {
-    window.currentGameSpeed = speed;
-    updateBtnActive(btn);
-    triggerGoalAlert(`⚡ 速度切換！`);
-}
-
-function rotateScreen(deg, btn) {
-    window.currentRotation = deg;
-    canvasContainer.style.transform = `rotate(${deg}deg)`;
-    updateBtnActive(btn);
-    window.initGameObjects();
-}
-
-function updateBtnActive(btn) {
-    const siblings = btn.parentNode.querySelectorAll('.btn');
-    siblings.forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tfcc-control-panel button').forEach(b => {
+        if(b.id && b.id.startsWith('btnMode')) b.classList.remove('active');
+    });
     btn.classList.add('active');
-}
+    window.comboCount = 0;
+    comboVal.innerText = "0 Combo";
+    window.initGameObjects();
+};
 
-function updateButtonAvailability() {
-    const btnRot90 = document.getElementById('rot_90'); const btnRot45 = document.getElementById('rot_45');
-    if (window.currentGameMode === 'default') { btnRot90.disabled = true; btnRot45.disabled = true; }
-    else if (window.currentGameMode === 'baseball') { btnRot90.disabled = false; btnRot45.disabled = true; }
-    else if (window.currentGameMode === 'football') { btnRot90.disabled = true; btnRot45.disabled = false; }
-}
+window.changeSpeed = function(speed, btn) {
+    window.currentGameSpeed = speed;
+    document.querySelectorAll('.tfcc-control-panel button').forEach(b => {
+        if(b.id && b.id.startsWith('speed_')) b.classList.remove('active');
+    });
+    btn.classList.add('active');
+};
 
-function onHands(res) {
-    if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-        const hand = res.multiHandLandmarks[0];
-       
-        const mcp = hand[9];
-        window.handInput.x = -((mcp.x * 20) - 10);
-        window.handInput.y = -((mcp.y * 12) - 6);
-       
-        const thumbBase = hand[2];
-        const pinkyBase = hand[17];
-        let dx = pinkyBase.x - thumbBase.x;
-        let dy = pinkyBase.y - thumbBase.y;
-        let angle = Math.atan2(dy, dx);
-        window.wristRotation = angle;
+window.rotateScreen = function(deg, btn) {
+    window.currentRotation = deg;
+    document.querySelectorAll('.tfcc-control-panel button').forEach(b => {
+        if(b.id && b.id.startsWith('rot_')) b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    document.getElementById('canvasContainer').style.transform = `rotate(${deg}deg)`;
+};
 
-        const wrist = hand[0];
-        const fingerTips = [8, 12, 16, 20];
-        let avgDistance = 0;
-        fingerTips.forEach(tipId => {
-            const tip = hand[tipId];
-            const dist = Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
-            avgDistance += dist;
-        });
-        avgDistance /= 4;
-        window.isFist = (avgDistance < 0.24);
+// 🎮 主視覺渲染與動畫迴圈
+function animateTFCC() {
+    requestAnimationFrame(animateTFCC);
 
-        let degDisplay = (angle * (180 / Math.PI)).toFixed(0);
-        let stateText = window.isFist ? "✊ 握拳中" : "✋ 張開";
-        if (window.currentGameMode === 'default' && starEnergy >= 100) {
-            stateText += " | ⚡ 握拳發射！";
+    if (currentActiveTab === 'tfcc-game-tab') {
+        if (window.playerMesh) {
+            window.playerMesh.position.x += (window.handInput.x - window.playerMesh.position.x) * 0.1;
+            window.playerMesh.position.y += (window.handInput.y - window.playerMesh.position.y) * 0.1;
         }
-        wristVal.innerText = `旋轉: ${degDisplay}° | 狀態: ${stateText}`;
-       
-        if (window.isFist) {
-            wristVal.style.color = "#00ff55";
-        } else if (window.wristSpeed > 0.05) {
-            wristVal.style.color = "#00ffff";
-        } else {
-            wristVal.style.color = "#ffcc00";
-        }
-
-        statusTag.style.backgroundColor = "#238636";
-        statusTag.innerText = `🟢 感測中 | X: ${window.handInput.x.toFixed(1)} Y: ${window.handInput.y.toFixed(1)}`;
-    } else {
-        statusTag.style.backgroundColor = "#bb8009"; statusTag.innerText = "🟡 請將手掌移入視訊範圍...";
+        renderer.render(scene, camera);
     }
 }
-
-const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-hands.onResults(onHands);
-
-const cameraFeed = new Camera(videoElement, {
-    onFrame: async () => { await hands.send({ image: videoElement }); }, width: 320, height: 240
-});
-cameraFeed.start().catch(() => { statusTag.innerText = "❌ 鏡頭配置失敗"; });
 
 window.initGameObjects();
-animate();
-function animate() { requestAnimationFrame(animate); window.updateGameLoop(); renderer.render(scene, camera); }
+animateTFCC();
+
+// MediaPipe Hands 相機追蹤啟動 (鏡頭可選/軟性備用)
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    hands.onResults((results) => {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            statusTag.innerText = "🟢 手勢監測中 (AI 鏡頭生效)";
+            statusTag.style.backgroundColor = "#10b981";
+            const lm = results.multiHandLandmarks[0];
+            const wrist = lm[0];
+            const index = lm[8];
+            
+            // 鏡頭輔助覆蓋手勢輸入
+            window.handInput.x = (0.5 - index.x) * 16;
+            window.handInput.y = (0.5 - index.y) * 10;
+        }
+    });
+
+    const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => {
+            if (currentActiveTab === 'tfcc-game-tab') {
+                await hands.send({ image: videoElement });
+            }
+        },
+        width: 160,
+        height: 120
+    });
+    cameraUtils.start();
+}
 </script>
 </body>
 </html>

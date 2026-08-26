@@ -11,6 +11,7 @@
 <!-- ☁️ 引入 Firebase SDK (Compat 版本) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
 <!-- 🛸 引入 TFCC 遊戲所需之 3D 與手势偵測 SDK -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -532,6 +533,15 @@ body.alert-mode {
 .high-score-label { font-size: 20px; color: #00ffcc; font-weight: bold; transition: text-shadow 0.3s, color 0.3s; }
 .high-score-label.record-breaking { color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b, 0 0 20px #ff9800; }
 
+/* TFCC 分頁專屬按鈕深色主題 (與 game.html 一致，僅作用於此分頁內，不影響全站其他按鈕) */
+.tfcc-game-wrapper .btn {
+  background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: normal; box-shadow: none;
+}
+.tfcc-game-wrapper .btn:hover { background-color: #30363d; border-color: #8b949e; }
+.tfcc-game-wrapper .btn.active { background-color: #1f6feb; color: #fff; border-color: #58a6ff; }
+.tfcc-game-wrapper .btn:disabled { opacity: 0.15; cursor: not-allowed; background-color: #0d1117; }
+
 /* ================= 按鈕與控制元件 ================= */
 .control-row {
   display: flex;
@@ -809,6 +819,7 @@ th {
   <div class="control-row">
     <button class="btn btn-warning" id="bottleZeroBtn" onclick="zeroBottleAngleCalibration()">📐 角度歸零校準</button>
     <button class="btn btn-primary" id="toggleBottleChartBtn" onclick="toggleBottleChart()">📈 顯示趨勢圖表</button>
+    <span id="imuHealthBadge" style="display:none; padding:6px 12px; border-radius:8px; font-weight:700; font-size:0.85rem; background:#fee2e2; color:#b91c1c;">⚠️ 姿態感測器訊號中斷，角度數值可能非即時</span>
   </div>
 
   <div class="cards-row">
@@ -1070,7 +1081,7 @@ th {
 <script>
 // ================= ☁️ Firebase 初始化設定 =================
 const firebaseConfig = {
-  apiKey: "AIzaSyC3VvI4_4wkzbo6ps4Xk9XgThMPd1uQG6Y",
+  apiKey: "AIzaSyC3VvI4_4wkzbo6ps4Xk9XgfhWPd1uQG6Y",
   authDomain: "esp32-rehab-system.firebaseapp.com",
   databaseURL: "https://esp32-rehab-system-default-rtdb.firebaseio.com",
   projectId: "esp32-rehab-system",
@@ -1082,6 +1093,19 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
+
+// 匿名登入：搭配 Firebase Security Rules 要求 auth != null，
+// 讓資料庫至少不會對「完全沒有經過這個 App」的外部請求開放讀寫。
+// 注意：這不是帳號密碼等級的存取控制，任何打開此頁面的人仍會自動取得一個匿名身分，
+// 只是能擋掉隨機掃描/直接打 API 的存取。真正要區分「這是哪個患者/治療師」，
+// 之後仍建議加上正式登入機制。
+let firebaseAuthReady = false;
+firebase.auth().onAuthStateChanged((user) => {
+  firebaseAuthReady = !!user;
+});
+firebase.auth().signInAnonymously().catch((err) => {
+  console.error("Firebase 匿名登入失敗：", err);
+});
 
 let lastCloudUploadTime = 0;
 let CLOUD_UPLOAD_INTERVAL = 1000;
@@ -1160,23 +1184,34 @@ function resetRepCounter() {
 // ================= 🛡️ 防呆邏輯 =================
 let prevAngleX = 0;
 let prevAngleY = 0;
+let prevSafetyCheckTime = 0;
 let alertTimeoutId = null;
 let alertConsecutiveCount = 0;
 
-const SPEED_THRESHOLD = 45;      
+// 注意：SPEED_THRESHOLD 單位是「度/秒」的真實角速度，不受 updateInterval 更新頻率影響。
+// 這個數值是估算的起始值，建議實際測試擺動速度後再微調。
+const SPEED_THRESHOLD = 180;
 const COMPENSATION_THRESHOLD = 35;
 
 function checkSafetyGuard(calibratedX, calibratedY) {
+  const now = Date.now();
+  const dtSec = prevSafetyCheckTime > 0 ? (now - prevSafetyCheckTime) / 1000 : 0;
+  prevSafetyCheckTime = now;
+
   const diffX = Math.abs(calibratedX - prevAngleX);
   const diffY = Math.abs(calibratedY - prevAngleY);
  
   prevAngleX = calibratedX;
   prevAngleY = calibratedY;
 
+  // 換算成真實角速度（度/秒），dtSec 過小或為0時跳過本次速度判斷，避免除以極小值暴衝
+  const angularSpeedX = dtSec > 0.01 ? diffX / dtSec : 0;
+  const angularSpeedY = dtSec > 0.01 ? diffY / dtSec : 0;
+
   let isAlertCandidate = false;
   let alertMsg = "";
 
-  if (diffX > SPEED_THRESHOLD || diffY > SPEED_THRESHOLD) {
+  if (angularSpeedX > SPEED_THRESHOLD || angularSpeedY > SPEED_THRESHOLD) {
     isAlertCandidate = true;
     alertMsg = "⚠️ 警示：動作過速！請放慢手腕擺動速度。";
   }
@@ -1378,6 +1413,8 @@ function changeCloudInterval(val) {
 }
 
 function uploadToFirebase(dataPayload) {
+  if (!firebaseAuthReady) return; // 尚未完成匿名登入前先不寫入，避免被規則拒絕
+
   const patientId = patientData.id ? patientData.id.trim() : "1";
   const recordRef = database.ref(`rehab_records/${patientId}`).push();
 
@@ -1632,22 +1669,27 @@ function onDisconnected() {
 
 function handleBLEData(event) {
   const value = event.target.value;
-  if (value.byteLength < 8) return;
+  if (value.byteLength < 9) return; // 韌體封包已擴充為 9 Bytes (多一個狀態位元)
 
   const rawX = value.getInt16(0, true);
   const rawY = value.getInt16(2, true);
- 
+
   currentRawAngleX = rawX;
   currentRawAngleY = rawY;
 
   const calibratedX = rawX - angleOffsetX;
   const calibratedY = rawY - angleOffsetY;
 
+  const statusByte = value.getUint8(8);
+  const imuHealthy = (statusByte & 0x01) === 1;
+  updateImuHealthIndicator(imuHealthy);
+
   const payload = {
     angleX: calibratedX,
     angleY: calibratedY,
     emg: value.getUint16(4, true),
-    adc: value.getUint16(6, true)
+    adc: value.getUint16(6, true),
+    imuHealthy: imuHealthy
   };
 
   const now = Date.now();
@@ -1661,6 +1703,15 @@ function handleBLEData(event) {
     uploadToFirebase(payload);
     lastCloudUploadTime = now;
   }
+}
+
+let lastImuHealthy = true;
+function updateImuHealthIndicator(isHealthy) {
+  if (isHealthy === lastImuHealthy) return; // 狀態沒變就不動 DOM
+  lastImuHealthy = isHealthy;
+  const badge = document.getElementById('imuHealthBadge');
+  if (!badge) return;
+  badge.style.display = isHealthy ? 'none' : 'inline-block';
 }
 
 function zeroBottleAngleCalibration() {
@@ -1943,28 +1994,37 @@ async function sendManualReport() {
     return;
   }
 
-  const targetUrl = `https://v2.chateverywhere.app/api/line/notify?token=${token}&message=${encodeURIComponent(messageText)}`;
+  // 改用 POST + body 傳遞 token，避免 token 明文出現在 URL（瀏覽器紀錄／中介伺服器 log／Referrer 都可能留下痕跡）。
+  // ⚠️ 若這個第三方端點實際上只接受 GET+query string，POST 可能會失敗；
+  // 若測試後發現無法送出，請把下面這段改回原本的 GET 寫法。
+  const targetUrl = `https://v2.chateverywhere.app/api/line/notify`;
 
   try {
     await fetch(targetUrl, {
-      method: 'GET',
-      mode: 'no-cors'
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: token, message: messageText })
     });
 
-    alert("✅ 報告已發送至 LINE！（請至手機確認接收狀態）");
+    // 注意：mode:'no-cors' 底下瀏覽器不會把回應內容/狀態碼交給我們讀取，
+    // 所以這裡「送出」跟「對方真的收到」是兩回事——只要網路本身沒斷線，
+    // 就算 token 失效或對方伺服器回錯誤，這段程式也偵測不到。
+    alert("📤 已送出通知請求，實際是否收到請至 LINE 確認（此方式無法回報真正送達結果）。");
   } catch (error) {
     console.error("LINE 發送錯誤：", error);
     alert(`❌ 發送失敗，發生網路錯誤：${error.message}`);
   }
 }
 
-// ================= 🛸 TFCC 3D 遊戲引擎核心 JS 邏輯 =================
-const tfccContainer = document.getElementById('canvasContainer');
+// ================= 🛸 TFCC 3D 遊戲引擎核心 JS 邏輯 (與 game.html 完全一致) =================
+const container = document.getElementById('canvasContainer');
 const statusTag = document.getElementById('statusTag');
 const highScoreVal = document.getElementById('highScoreVal');
 const comboVal = document.getElementById('comboVal');
 const wristVal = document.getElementById('wristVal');
 const videoElement = document.getElementById('webcam');
+const canvasContainer = document.getElementById('canvasContainer');
 const goalAlert = document.getElementById('goalAlert');
 const screenOverlay = document.getElementById('screenOverlay');
 const energyBarContainer = document.getElementById('energyBarContainer');
@@ -1977,7 +2037,7 @@ const cpuScoreEl = document.getElementById('cpuScore');
 
 // 核心狀態
 window.comboCount = 0;
-window.isBreakingRecord = false;
+window.isBreakingRecord = false; // 用於標記當前回合是否「正在衝擊新紀錄」
 window.handInput = { x: 0, y: 0 };
 window.wristRotation = 0;      
 window.lastWristRotation = 0;  
@@ -1994,18 +2054,19 @@ let currentPlanet = null;
 window.footballPlayerScore = 0;
 window.footballCpuScore = 0;
 
+// 儲存各模式的「最高 Combo 紀錄」
 let rocketMaxCombo = parseInt(localStorage.getItem('rocket_max_combo') || '0');
 let baseballMaxCombo = parseInt(localStorage.getItem('baseball_max_combo') || '0');
 let footballMaxCombo = parseInt(localStorage.getItem('football_max_combo') || '0');
 
-const tfccWidth = 640, tfccHeight = 400;
+const width = 640, height = 400;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, tfccWidth / tfccHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
 camera.position.z = 15;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(tfccWidth, tfccHeight);
-tfccContainer.appendChild(renderer.domElement);
+renderer.setSize(width, height);
+container.appendChild(renderer.domElement);
 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(5, 10, 7); scene.add(dirLight);
@@ -2020,6 +2081,7 @@ window.initGameObjects = function() {
     if (trajectoryLine) { scene.remove(trajectoryLine); trajectoryLine = null; }
     screenOverlay.className = ""; energyBarContainer.style.display = "none"; matchScoreTitle.style.display = "none";
    
+    // 初始化時移除破紀錄高亮樣式
     highScoreVal.classList.remove('record-breaking');
 
     updateButtonAvailability();
@@ -2085,150 +2147,522 @@ window.initGameObjects = function() {
         scene.add(window.playerGroup);
 
         window.targetMesh = new THREE.Group();
-        window.targetMesh.add(new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshPhongMaterial({ color: 0xffffff, wireframe: true })));
+        window.targetMesh.add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12), new THREE.MeshPhongMaterial({ color: 0xffffff })));
         scene.add(window.targetMesh);
-        resetFootballPositions();
+
+        buildFootballGoal();
+        resetFootball();
     }
 };
 
-function updateButtonAvailability() {
-    // 按鈕控制狀態可於此處延伸
-}
-
-function updateHighScoreDisplay() {
-    let curMax = 0;
-    if (window.currentGameMode === 'default') curMax = rocketMaxCombo;
-    else if (window.currentGameMode === 'baseball') curMax = baseballMaxCombo;
-    else if (window.currentGameMode === 'football') curMax = footballMaxCombo;
-
-    highScoreVal.innerText = `👑 最高 Combo: ${curMax}`;
+function spawnStarsBackground() {
+    for (let i = 0; i < 45; i++) {
+        let star = new THREE.Mesh(new THREE.OctahedronGeometry(0.15), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 }));
+        star.position.set((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 10, 0);
+        scene.add(star); backgroundStars.push(star);
+    }
 }
 
 function updateEnergyBar() {
     energyBar.style.width = `${starEnergy}%`;
-    energyText.innerText = `能量收集中: ${Math.round(starEnergy)}%`;
-}
-
-function spawnStarsBackground() {
-    for (let i = 0; i < 60; i++) {
-        const star = new THREE.Mesh(
-            new THREE.SphereGeometry(0.04, 4, 4),
-            new THREE.MeshBasicMaterial({ color: 0xffffff })
-        );
-        star.position.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 20, -5 - Math.random() * 10);
-        scene.add(star);
-        backgroundStars.push(star);
+    if (starEnergy >= 100) {
+        energyText.innerText = "⚡ 能量滿！請「五指握拳」發射光波！";
+        energyBar.style.background = "linear-gradient(90deg, #ff0055, #ffcc00)";
+    } else {
+        energyText.innerText = `光波能量: ${starEnergy}%`;
+        energyBar.style.background = "linear-gradient(90deg, #00ffff, #00ff55)";
     }
 }
 
+function updateHighScoreDisplay() {
+    let record = getRecordOfCurrentMode();
+    highScoreVal.innerText = `👑 最高 Combo: ${record}`;
+}
+
+function getRecordOfCurrentMode() {
+    if (window.currentGameMode === 'default') return rocketMaxCombo;
+    if (window.currentGameMode === 'baseball') return baseballMaxCombo;
+    if (window.currentGameMode === 'football') return footballMaxCombo;
+    return 0;
+}
+
+// 處理得分、增加 Combo，以及判斷是否進入「超越紀錄狀態」
+function handleComboScore(pointsGained = 1) {
+    let oldRecord = getRecordOfCurrentMode();
+    window.comboCount += pointsGained;
+    comboVal.innerText = `${window.comboCount} Combo`;
+
+    // 只有當當前局的 comboCount 真正突破歷史紀錄時，才判定進入狂熱狀態
+    if (window.comboCount > oldRecord) {
+        window.isBreakingRecord = true; // 進入/保持破紀錄狂熱狀態
+       
+        // 更新並儲存新歷史紀錄
+        updateNewRecord(window.comboCount);
+        updateHighScoreDisplay();
+    }
+
+    // 如果當前處於破紀錄狀態，才亮特效、閃爍
+    if (window.isBreakingRecord) {
+        highScoreVal.classList.add('record-breaking'); // 計分板發光
+        triggerLimitBreakEffect(); // 觸發全螢幕綠色閃爍與鏡頭震動
+    } else {
+        // 若還未超越歷史紀錄，保持普通樣式
+        highScoreVal.classList.remove('record-breaking');
+        screenOverlay.className = "";
+    }
+}
+
+function updateNewRecord(newVal) {
+    if (window.currentGameMode === 'default') {
+        rocketMaxCombo = newVal; localStorage.setItem('rocket_max_combo', rocketMaxCombo);
+    } else if (window.currentGameMode === 'baseball') {
+        baseballMaxCombo = newVal; localStorage.setItem('baseball_max_combo', baseballMaxCombo);
+    } else if (window.currentGameMode === 'football') {
+        footballMaxCombo = newVal; localStorage.setItem('football_max_combo', footballMaxCombo);
+    }
+}
+
+// 超越歷史最高時的震碎與螢幕炫光特效
+function triggerLimitBreakEffect() {
+    screenOverlay.classList.remove('limit-break');
+    void screenOverlay.offsetWidth; // 強制重繪 CSS 動畫
+    screenOverlay.classList.add('limit-break');
+   
+    // 鏡頭微幅震動 (0.3秒)
+    let count = 0;
+    let shake = setInterval(() => {
+        camera.position.x = (Math.random() - 0.5) * 0.25;
+        camera.position.y = (Math.random() - 0.5) * 0.25;
+        count++;
+        if (count > 6) {
+            clearInterval(shake);
+            camera.position.set(0, 0, 15);
+        }
+    }, 50);
+
+    // 粒子發射位置
+    let effectPos = window.targetMesh ? window.targetMesh.position : new THREE.Vector3(0,0,0);
+    triggerHitParticles(effectPos, 0x00ffcc, 40);
+}
+
+// 斷 Combo 歸零，並立刻關閉所有特效與「破紀錄」判定標記
+function resetCombo() {
+    window.comboCount = 0;
+    window.isBreakingRecord = false; // 關鍵：歸零後脫離破紀錄狂熱狀態，不超越就不亮
+   
+    comboVal.innerText = "0 Combo";
+   
+    // 立刻解除計分板黃金霓虹高亮
+    highScoreVal.classList.remove('record-breaking');
+   
+    // 立刻強制消除邊框閃爍特效類別，確保視覺瞬間冷卻
+    screenOverlay.classList.remove('limit-break');
+    screenOverlay.classList.remove('blue-lock-storm');
+   
+    updateHighScoreDisplay();
+}
+
+function launchKamehameha() {
+    if (isKamehamehaActive) return;
+    isKamehamehaActive = true;
+    starEnergy = 0;
+    updateEnergyBar();
+
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 25, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.95 }));
+    beam.rotation.z = -Math.PI / 2;
+    beam.position.set(window.playerMesh.position.x + 12, window.playerMesh.position.y, 0);
+    scene.add(beam);
+   
+    triggerHitParticles(window.playerMesh.position, 0x00ffff, 40);
+    triggerGoalAlert("🔥 光波爆裂發射！");
+
+    setTimeout(() => {
+        let py = window.playerMesh.position.y;
+
+        if (currentPlanet && Math.abs(currentPlanet.position.y - py) < 2.0) {
+            triggerHitParticles(currentPlanet.position, 0xff3300, 60);
+           
+            let comboAdd = 8;
+            if (window.currentGameSpeed < 0.1) { comboAdd = 4; }
+            else if (window.currentGameSpeed > 0.2) { comboAdd = 12; }
+
+            triggerGoalAlert(`🪐 星球大爆炸!\n+${comboAdd} Combo`);
+            handleComboScore(comboAdd);
+            spawnRandomPlanet();
+        }
+
+        if (window.targetMesh && Math.abs(window.targetMesh.position.y - py) < 1.5) {
+            triggerHitParticles(window.targetMesh.position, 0x00ff55, 30);
+           
+            handleComboScore(2);
+            window.targetMesh.position.set(10, (Math.random() - 0.5) * 5, 0);
+        }
+    }, 200);
+
+    let fade = setInterval(() => {
+        beam.material.opacity -= 0.12;
+        beam.scale.y += 0.08;
+        if (beam.material.opacity <= 0) { scene.remove(beam); clearInterval(fade); isKamehamehaActive = false; }
+    }, 50);
+}
+
 function spawnRandomPlanet() {
-    if (currentPlanet) scene.remove(currentPlanet);
-    currentPlanet = new THREE.Mesh(
-        new THREE.SphereGeometry(1.2, 16, 16),
-        new THREE.MeshPhongMaterial({ color: 0x3366cc })
-    );
-    currentPlanet.position.set(12, (Math.random() - 0.5) * 8, -2);
+    if (currentPlanet) { scene.remove(currentPlanet); }
+    currentPlanet = new THREE.Mesh(new THREE.SphereGeometry(1.2, 24, 24), new THREE.MeshPhongMaterial({ color: 0xe65c00, roughness: 0.6 }));
+    currentPlanet.position.set(12, (Math.random() - 0.5) * 6, 0);
     scene.add(currentPlanet);
 }
 
 function resetBaseballPositions() {
-    window.playerGroup.position.set(-6, -3, 0);
-    window.targetMesh.position.set(8, (Math.random() - 0.5) * 4, 0);
+    if (!window.targetMesh) return;
+    window.targetMesh.userData = { hit: false, vx: 0, vy: 0 };
+    let startPos = new THREE.Vector3(), targetPos = new THREE.Vector3();
+    if (window.currentRotation === 90) {
+        let startFromTop = Math.random() > 0.5;
+        startPos.set((Math.random() - 0.5) * 6, startFromTop ? 6 : -6, 0);
+        targetPos.set((Math.random() - 0.5) * 6, startFromTop ? -6 : 6, 0);
+        window.playerGroup.position.set(0, startFromTop ? -3.5 : 3.5, 0);
+    } else {
+        startPos.set(8, (Math.random() - 0.5) * 5, 0);
+        targetPos.set(-8, (Math.random() - 0.5) * 5, 0);
+        window.playerGroup.position.set(-5.5, 0, 0);
+    }
+    window.targetMesh.position.copy(startPos);
+    window.targetMesh.userData.direction = new THREE.Vector3().subVectors(targetPos, startPos).normalize();
+    rawLinePoints = [startPos.clone(), targetPos.clone()];
+    triggerWaveEffect(window.targetMesh.position, 0x00ffcc);
+}
+
+function buildFootballGoal() {
+    if(window.soccerNet) scene.remove(window.soccerNet);
+    window.soccerNet = new THREE.Group();
+    window.goalFrame = new THREE.Group();
+   
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 8), new THREE.MeshPhongMaterial({ color: 0x00ffff }));
+    const cross = post.clone(); cross.rotation.z = Math.PI/2; cross.position.y = 2.5;
+    const lPost = post.clone(); lPost.position.set(-2.5, 0, 0);
+    const rPost = post.clone(); rPost.position.set(2.5, 0, 0);
+    window.goalFrame.add(cross, lPost, rPost);
+   
+    window.goalFrame.position.set(window.currentRotation === 45 ? -5 : -6, window.currentRotation === 45 ? 2.5 : 0, 0);
+    window.soccerNet.add(window.goalFrame); scene.add(window.soccerNet);
+}
+
+function resetFootball() {
+    window.targetMesh.position.set(2 + Math.random() * 3, (Math.random() - 0.5) * 4, 0);
+    window.targetMesh.userData = { kicked: false, vx: 0, vy: 0 };
+    triggerWaveEffect(window.targetMesh.position, 0x00ffff);
 }
 
 function updateFootballBackground() {
-    scene.background = new THREE.Color(0x051026);
+    if (window.currentGameMode !== 'football') return;
+    scene.background = new THREE.Color(`rgb(${5 + Math.min(window.comboCount * 15, 100)}, 12, 35)`);
 }
 
 function updateFootballScoreUI() {
-    playerScoreEl.innerText = window.footballPlayerScore;
-    cpuScoreEl.innerText = window.footballCpuScore;
+    playerScoreEl.innerText = window.footballPlayerScore; cpuScoreEl.innerText = window.footballCpuScore;
 }
 
-function resetFootballPositions() {
-    window.playerGroup.position.set(-5, -2, 0);
-    window.targetMesh.position.set(6, 0, 0);
-}
+window.updateGameLoop = function() {
+    window.wristSpeed = Math.abs(window.wristRotation - window.lastWristRotation);
+    window.lastWristRotation = window.wristRotation;
 
-window.changeMode = function(mode, btn) {
-    window.currentGameMode = mode;
-    document.querySelectorAll('.tfcc-control-panel button').forEach(b => {
-        if(b.id && b.id.startsWith('btnMode')) b.classList.remove('active');
-    });
-    btn.classList.add('active');
-    window.comboCount = 0;
-    comboVal.innerText = "0 Combo";
-    window.initGameObjects();
-};
+    for (let i = waveRings.length - 1; i >= 0; i--) { waveRings[i].scale.addScalar(0.08); waveRings[i].material.opacity -= 0.04; if (waveRings[i].material.opacity <= 0) { scene.remove(waveRings[i]); waveRings.splice(i, 1); } }
+    for (let i = flameParticles.length - 1; i >= 0; i--) { flameParticles[i].position.add(flameParticles[i].userData.velocity); flameParticles[i].scale.multiplyScalar(0.92); if (flameParticles[i].material.opacity <= 0) scene.remove(flameParticles[i]); }
+    for (let i = particles.length - 1; i >= 0; i--) { particles[i].position.add(particles[i].userData.velocity); particles[i].material.opacity -= 0.03; if (particles[i].material.opacity <= 0) { scene.remove(particles[i]); particles.splice(i, 1); } }
 
-window.changeSpeed = function(speed, btn) {
-    window.currentGameSpeed = speed;
-    document.querySelectorAll('.tfcc-control-panel button').forEach(b => {
-        if(b.id && b.id.startsWith('speed_')) b.classList.remove('active');
-    });
-    btn.classList.add('active');
-};
+    if (window.currentGameMode === 'default') {
+        window.playerMesh.position.y += (window.handInput.y - window.playerMesh.position.y) * 0.15;
+        window.playerMesh.position.x += (window.handInput.x - window.playerMesh.position.x) * 0.15;
+       
+        window.targetMesh.position.x -= window.currentGameSpeed * 1.1;
 
-window.rotateScreen = function(deg, btn) {
-    window.currentRotation = deg;
-    document.querySelectorAll('.tfcc-control-panel button').forEach(b => {
-        if(b.id && b.id.startsWith('rot_')) b.classList.remove('active');
-    });
-    btn.classList.add('active');
-    document.getElementById('canvasContainer').style.transform = `rotate(${deg}deg)`;
-};
+        backgroundStars.forEach(star => {
+            if (window.playerMesh.position.distanceTo(star.position) < 1.6) {
+                triggerHitParticles(star.position, 0x00ffff, 5);
+                star.position.set((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 10, 0);
+                if (starEnergy < 100) {
+                    starEnergy = Math.min(starEnergy + 12, 100);
+                    updateEnergyBar();
+                }
+            }
+        });
 
-// 🎮 主視覺渲染與動畫迴圈
-function animateTFCC() {
-    requestAnimationFrame(animateTFCC);
-
-    if (currentActiveTab === 'tfcc-game-tab') {
-        if (window.playerMesh) {
-            window.playerMesh.position.x += (window.handInput.x - window.playerMesh.position.x) * 0.1;
-            window.playerMesh.position.y += (window.handInput.y - window.playerMesh.position.y) * 0.1;
+        if (starEnergy >= 100 && window.isFist) {
+            launchKamehameha();
         }
-        renderer.render(scene, camera);
+
+        if (currentPlanet) {
+            currentPlanet.position.x -= window.currentGameSpeed * 0.7;
+            if (window.playerMesh.position.distanceTo(currentPlanet.position) < 1.8) {
+                resetCombo(); // 撞到星球 -> 斷 Combo
+                spawnRandomPlanet();
+                triggerGoalAlert("💥 撞上星球！\nCombo 歸零！");
+            }
+            if (currentPlanet.position.x < -10) spawnRandomPlanet();
+        }
+
+        if (window.targetMesh.position.x < -10) {
+            window.targetMesh.position.set(10, (Math.random() - 0.5) * 5, 0);
+        }
+
+        if (window.playerMesh.position.distanceTo(window.targetMesh.position) < 1.5) {
+            handleComboScore(1);
+            window.targetMesh.position.set(10, (Math.random() - 0.5) * 5, 0);
+        }
+
+    } else if (window.currentGameMode === 'baseball') {
+        if (window.currentRotation === 90) window.playerGroup.position.x += (window.handInput.x - window.playerGroup.position.x) * 0.2;
+        else window.playerGroup.position.y += (window.handInput.y - window.playerGroup.position.y) * 0.2;
+
+        window.playerGroup.rotation.z = window.wristRotation;
+
+        if (window.comboCount > 0) emitBatFire();
+
+        let ballData = window.targetMesh.userData;
+        if (!ballData.hit) {
+            if (ballData.direction) window.targetMesh.position.addScaledVector(ballData.direction, window.currentGameSpeed * 1.5);
+            if (rawLinePoints.length === 2) { trajectoryLine.geometry.setFromPoints([window.targetMesh.position, rawLinePoints[1]]); }
+           
+            // 棒球漏接球飛出界外 -> 斷 Combo
+            if (window.targetMesh.position.x < -10 || Math.abs(window.targetMesh.position.y) > 7) {
+                resetCombo();
+                resetBaseballPositions();
+            }
+
+            if (window.playerGroup.position.distanceTo(window.targetMesh.position) < 2.5) {
+                if (window.wristSpeed > 0.05) {
+                    ballData.hit = true;
+                   
+                    triggerGoalAlert("⚾ 全壘打揮擊！");
+                    let factor = 20 + Math.min(window.comboCount * 8, 60);
+                    triggerHitParticles(window.targetMesh.position, 0xff3300, factor);
+
+                    handleComboScore(1);
+
+                    ballData.vx = 0.5; ballData.vy = (Math.random() - 0.5) * 0.4;
+                } else {
+                    wristVal.innerText = "⚠️ 碰到了！請快速轉動手腕揮棒！";
+                    wristVal.style.color = "#ff3336";
+                }
+            }
+        } else {
+            window.targetMesh.position.x += ballData.vx; window.targetMesh.position.y += ballData.vy;
+            if (Math.abs(window.targetMesh.position.x) > 12) resetBaseballPositions();
+        }
+
+    } else if (window.currentGameMode === 'football') {
+        window.playerGroup.position.y += (window.handInput.y - window.playerGroup.position.y) * 0.15;
+        window.playerGroup.position.x += (window.handInput.x - window.playerGroup.position.x) * 0.15;
+       
+        window.playerGroup.rotation.z = 0;
+
+        let ballData = window.targetMesh.userData;
+
+        if (!ballData.kicked) {
+            const footWorldPos = new THREE.Vector3();
+            window.footballFoot.getWorldPosition(footWorldPos);
+            let distanceToFoot = footWorldPos.distanceTo(window.targetMesh.position);
+
+            if (distanceToFoot < 1.0) {
+                ballData.kicked = true;
+
+                if (footWorldPos.x > window.targetMesh.position.x) {
+                    ballData.vx = -0.55;
+                    ballData.vy = (window.targetMesh.position.y - footWorldPos.y) * 0.4;
+                    triggerGoalAlert("⚽ 往左爆射！");
+                } else {
+                    ballData.vx = 0.55;
+                    ballData.vy = (window.targetMesh.position.y - footWorldPos.y) * 0.4;
+                    triggerGoalAlert("⚽ 往右開球！");
+                }
+
+                triggerHitParticles(window.targetMesh.position, 0x00ffff, 25);
+                screenOverlay.classList.add('blue-lock-storm');
+            }
+        }
+
+        if (ballData.kicked) {
+            window.targetMesh.position.x += ballData.vx;
+            window.targetMesh.position.y += ballData.vy;
+
+            if (window.targetMesh.position.x <= -6.0) {
+                if (window.targetMesh.position.y >= -2.5 && window.targetMesh.position.y <= 2.5) {
+                    window.footballPlayerScore++;
+                    updateFootballScoreUI();
+                    triggerGoalAlert("🥅 GOAL!!! 絕妙破網！");
+                   
+                    handleComboScore(1);
+                } else {
+                    // 沒射進門 -> 斷 Combo
+                    resetCombo();
+                    window.footballCpuScore++;
+                    updateFootballScoreUI();
+                    triggerGoalAlert("❌ 射偏了！沒對準球門！");
+                }
+                screenOverlay.classList.remove('blue-lock-storm');
+                resetFootball();
+            }
+            else if (Math.abs(window.targetMesh.position.x) > 10 || Math.abs(window.targetMesh.position.y) > 7) {
+                // 飛出界外 -> 斷 Combo
+                resetCombo();
+                window.footballCpuScore++;
+                updateFootballScoreUI();
+                triggerGoalAlert("❌ 飛出界外！");
+                screenOverlay.classList.remove('blue-lock-storm');
+                resetFootball();
+            }
+        }
+    }
+};
+
+function triggerGoalAlert(txt) {
+    goalAlert.innerText = txt; goalAlert.classList.add('show');
+    setTimeout(() => goalAlert.classList.remove('show'), 1200);
+}
+
+function triggerWaveEffect(pos, colorHex) {
+    let ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.6, 16), new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.8 }));
+    ring.position.copy(pos); scene.add(ring); waveRings.push(ring);
+}
+
+function emitBatFire() {
+    let angle = window.playerGroup.rotation.z;
+    for(let i = 0; i < 5; i++) {
+        let p = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff4500, transparent: true, opacity: 0.8 }));
+        let offset = (Math.random() - 0.5) * 2.5;
+        p.position.set(
+            window.playerGroup.position.x - offset * Math.sin(angle),
+            window.playerGroup.position.y + offset * Math.cos(angle),
+            0
+        );
+        p.userData = { velocity: new THREE.Vector3((Math.random()-0.5)*0.02, 0.04, 0) };
+        scene.add(p); flameParticles.push(p);
+    }
+}
+
+function triggerHitParticles(pos, colorHex, count) {
+    for (let i = 0; i < count; i++) {
+        let p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 1 }));
+        p.position.copy(pos);
+        p.userData = { velocity: new THREE.Vector3((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.1) };
+        scene.add(p); particles.push(p);
+    }
+}
+   
+function changeMode(mode, btn) {
+    window.currentGameMode = mode;
+    updateBtnActive(btn);
+    window.currentRotation = 0;
+    canvasContainer.style.transform = `rotate(0deg)`;
+    window.footballPlayerScore = 0;
+    window.footballCpuScore = 0;
+    resetCombo();
+    window.initGameObjects();
+}
+
+function changeSpeed(speed, btn) {
+    window.currentGameSpeed = speed;
+    updateBtnActive(btn);
+    triggerGoalAlert(`⚡ 速度切換！`);
+}
+
+function rotateScreen(deg, btn) {
+    window.currentRotation = deg;
+    canvasContainer.style.transform = `rotate(${deg}deg)`;
+    updateBtnActive(btn);
+    window.initGameObjects();
+}
+
+function updateBtnActive(btn) {
+    const siblings = btn.parentNode.querySelectorAll('.btn');
+    siblings.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function updateButtonAvailability() {
+    const btnRot90 = document.getElementById('rot_90'); const btnRot45 = document.getElementById('rot_45');
+    if (window.currentGameMode === 'default') { btnRot90.disabled = true; btnRot45.disabled = true; }
+    else if (window.currentGameMode === 'baseball') { btnRot90.disabled = false; btnRot45.disabled = true; }
+    else if (window.currentGameMode === 'football') { btnRot90.disabled = true; btnRot45.disabled = false; }
+}
+
+function onHands(res) {
+    if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+        const hand = res.multiHandLandmarks[0];
+       
+        const mcp = hand[9];
+        window.handInput.x = -((mcp.x * 20) - 10);
+        window.handInput.y = -((mcp.y * 12) - 6);
+       
+        const thumbBase = hand[2];
+        const pinkyBase = hand[17];
+        let dx = pinkyBase.x - thumbBase.x;
+        let dy = pinkyBase.y - thumbBase.y;
+        let angle = Math.atan2(dy, dx);
+        window.wristRotation = angle;
+
+        const wrist = hand[0];
+        const fingerTips = [8, 12, 16, 20];
+        let avgDistance = 0;
+        fingerTips.forEach(tipId => {
+            const tip = hand[tipId];
+            const dist = Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
+            avgDistance += dist;
+        });
+        avgDistance /= 4;
+        window.isFist = (avgDistance < 0.24);
+
+        let degDisplay = (angle * (180 / Math.PI)).toFixed(0);
+        let stateText = window.isFist ? "✊ 握拳中" : "✋ 張開";
+        if (window.currentGameMode === 'default' && starEnergy >= 100) {
+            stateText += " | ⚡ 握拳發射！";
+        }
+        wristVal.innerText = `旋轉: ${degDisplay}° | 狀態: ${stateText}`;
+       
+        if (window.isFist) {
+            wristVal.style.color = "#00ff55";
+        } else if (window.wristSpeed > 0.05) {
+            wristVal.style.color = "#00ffff";
+        } else {
+            wristVal.style.color = "#ffcc00";
+        }
+
+        statusTag.style.backgroundColor = "#238636";
+        statusTag.innerText = `🟢 感測中 | X: ${window.handInput.x.toFixed(1)} Y: ${window.handInput.y.toFixed(1)}`;
+    } else {
+        statusTag.style.backgroundColor = "#bb8009"; statusTag.innerText = "🟡 請將手掌移入視訊範圍...";
     }
 }
 
 window.initGameObjects();
 animateTFCC();
 
-// MediaPipe Hands 相機追蹤啟動 (鏡頭可選/軟性備用)
-if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    const hands = new Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-    hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-    hands.onResults((results) => {
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            statusTag.innerText = "🟢 手勢監測中 (AI 鏡頭生效)";
-            statusTag.style.backgroundColor = "#10b981";
-            const lm = results.multiHandLandmarks[0];
-            const wrist = lm[0];
-            const index = lm[8];
-            
-            // 鏡頭輔助覆蓋手勢輸入
-            window.handInput.x = (0.5 - index.x) * 16;
-            window.handInput.y = (0.5 - index.y) * 10;
-        }
-    });
+// 🎮 主視覺渲染與動畫迴圈 (只在「TFCC 3D 復健宇宙」分頁開啟時才實際運算與渲染，避免切到其他分頁時仍佔用資源)
+function animateTFCC() {
+    requestAnimationFrame(animateTFCC);
+    if (currentActiveTab === 'tfcc-game-tab') {
+        window.updateGameLoop();
+        renderer.render(scene, camera);
+    }
+}
 
-    const cameraUtils = new Camera(videoElement, {
+// MediaPipe Hands 相機追蹤啟動 (鏡頭可選/軟性備用；僅在該分頁開啟時才送出影像幀進行辨識)
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.onResults(onHands);
+
+    const cameraFeed = new Camera(videoElement, {
         onFrame: async () => {
             if (currentActiveTab === 'tfcc-game-tab') {
                 await hands.send({ image: videoElement });
             }
         },
-        width: 160,
-        height: 120
+        width: 320,
+        height: 240
     });
-    cameraUtils.start();
+    cameraFeed.start().catch(() => { statusTag.innerText = "❌ 鏡頭配置失敗"; });
 }
 </script>
 </body>

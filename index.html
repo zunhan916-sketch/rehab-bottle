@@ -1994,26 +1994,34 @@ async function sendManualReport() {
     return;
   }
 
-  // 改用 POST + body 傳遞 token，避免 token 明文出現在 URL（瀏覽器紀錄／中介伺服器 log／Referrer 都可能留下痕跡）。
-  // ⚠️ 若這個第三方端點實際上只接受 GET+query string，POST 可能會失敗；
-  // 若測試後發現無法送出，請把下面這段改回原本的 GET 寫法。
-  const targetUrl = `https://v2.chateverywhere.app/api/line/notify`;
+  // 實測確認：這個服務是用 GET + query string 呼叫（token、message 放在網址參數），
+  // 官方文件裡的 POST + Authorization Header 寫法在瀏覽器裡會因為跨網域預檢請求被擋下而失敗。
+  // 這裡先嘗試「正常模式」讀取真正的回應內容(對方若有開放CORS就能看到真實成功/失敗)，
+  // 如果對方沒開放讀取回應，會自動退回「盲送」模式，訊息仍會送達，只是讀不到結果。
+  const targetUrl = `https://v2.chateverywhere.app/api/line/notify?token=${encodeURIComponent(token)}&message=${encodeURIComponent(messageText)}`;
 
   try {
-    await fetch(targetUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ token: token, message: messageText })
-    });
+    const response = await fetch(targetUrl, { method: 'GET' });
+    const data = await response.json().catch(() => null);
 
-    // 注意：mode:'no-cors' 底下瀏覽器不會把回應內容/狀態碼交給我們讀取，
-    // 所以這裡「送出」跟「對方真的收到」是兩回事——只要網路本身沒斷線，
-    // 就算 token 失效或對方伺服器回錯誤，這段程式也偵測不到。
-    alert("📤 已送出通知請求，實際是否收到請至 LINE 確認（此方式無法回報真正送達結果）。");
-  } catch (error) {
-    console.error("LINE 發送錯誤：", error);
-    alert(`❌ 發送失敗，發生網路錯誤：${error.message}`);
+    if (response.ok && data && data.success) {
+      const remaining = data.quota && typeof data.quota.remaining === 'number' ? data.quota.remaining : '未知';
+      alert(`✅ 報告已成功發送至 LINE！（本月剩餘額度：${remaining}）`);
+    } else if (response.ok) {
+      alert("📤 已送出，但伺服器回應內容無法解讀，請自行至 LINE 確認是否收到。");
+    } else {
+      alert(`❌ 發送失敗（狀態碼 ${response.status}）。請確認 Token 是否正確。`);
+    }
+  } catch (corsError) {
+    // 讀不到回應，很可能是對方伺服器沒有針對瀏覽器開放 CORS，改用盲送模式確保訊息仍能送出
+    console.warn("無法讀取 LINE 通知回應內容（可能對方未開放 CORS），改用盲送模式：", corsError);
+    try {
+      await fetch(targetUrl, { method: 'GET', mode: 'no-cors' });
+      alert("📤 已送出通知請求（無法讀取伺服器回應，請自行至 LINE 確認是否收到）。");
+    } catch (sendError) {
+      console.error("LINE 發送錯誤：", sendError);
+      alert(`❌ 發送失敗，發生網路錯誤：${sendError.message}`);
+    }
   }
 }
 

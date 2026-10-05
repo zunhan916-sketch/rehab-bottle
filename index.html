@@ -376,26 +376,21 @@ body.alert-mode {
   border: 1px solid rgba(226, 232, 240, 0.8);
   transition: all 0.3s ease;
 }
-.bottle-stage {
-  width: 70px;
-  height: 150px;
-  position: relative;
-  transform-style: preserve-3d;
-  transition: transform 0.15s ease-out, width 0.3s ease, height 0.3s ease;
-  margin-top: 15px;
-}
-.bottle-face {
-  position: absolute;
+#ballStage {
   width: 100%;
-  height: 100%;
-  border-radius: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.8), rgba(99, 102, 241, 0.9));
-  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3);
-  transition: all 0.3s ease;
+  max-width: 360px;
+  margin-top: 5px;
+  display: flex;
+  justify-content: center;
 }
-.face-front { transform: rotateY(0deg) translateZ(18px); display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size: 0.95rem;}
-.face-back { transform: rotateY(180deg) translateZ(18px); }
+#ballStage canvas {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 14px 14px rgba(234, 88, 12, 0.22));
+}
+#bottle-tab:not(.chart-collapsed) #ballStage { max-width: 260px; }
 
 .chart-section {
   flex: 1;
@@ -415,17 +410,6 @@ body.alert-mode {
   min-height: 420px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border: 2px solid rgba(79, 70, 229, 0.15);
-}
-#bottle-tab.chart-collapsed .bottle-stage {
-  width: 110px;
-  height: 230px;
-}
-#bottle-tab.chart-collapsed .face-front {
-  font-size: 1.2rem;
-  transform: rotateY(0deg) translateZ(28px);
-}
-#bottle-tab.chart-collapsed .face-back {
-  transform: rotateY(180deg) translateZ(28px);
 }
 #bottle-tab.chart-collapsed .metric-value {
   font-size: 4.5rem;
@@ -673,7 +657,7 @@ th {
     <span>系統首頁</span>
   </div>
   <div class="nav-item" onclick="switchTab('bottle-tab', this); closeSidebarMobile();">
-    <span class="nav-icon">🍼</span>
+    <span class="nav-icon">🟠</span>
     <span>智慧角度(手腕彎曲)</span>
   </div>
   <div class="nav-item" onclick="switchTab('game-tab', this); closeSidebarMobile();">
@@ -683,10 +667,6 @@ th {
   <div class="nav-item" onclick="switchTab('tfcc-game-tab', this); closeSidebarMobile();">
     <span class="nav-icon">🪐</span>
     <span>TFCC 3D 復健宇宙(三角纖維軟骨)</span>
-  </div>
-  <div class="nav-item" onclick="switchTab('emg-tab', this); closeSidebarMobile();">
-    <span class="nav-icon">⚡</span>
-    <span>肌電訊號監測(有沒有認真出力)</span>
   </div>
   <div class="nav-item" onclick="switchTab('pressure-tab', this); closeSidebarMobile();">
     <span class="nav-icon">💪</span>
@@ -814,7 +794,7 @@ th {
   </div>
 </div>
 
-<!-- 🍼 智慧水瓶分頁 -->
+<!-- 🟠 智慧復健球分頁 -->
 <div id="bottle-tab" class="tab-content chart-collapsed">
   <div class="control-row">
     <button class="btn btn-warning" id="bottleZeroBtn" onclick="zeroBottleAngleCalibration()">📐 角度歸零校準</button>
@@ -852,11 +832,8 @@ th {
 
   <div class="visual-layout">
     <div class="visual-container">
-      <strong style="color:var(--text-muted); font-size: 1rem; margin-bottom: 10px;">水瓶 3D 姿勢模擬</strong>
-      <div class="bottle-stage" id="bottleStage">
-        <div class="bottle-face face-front">水瓶</div>
-        <div class="bottle-face face-back"></div>
-      </div>
+      <strong style="color:var(--text-muted); font-size: 1rem; margin-bottom: 10px;">復健球 3D 姿勢模擬</strong>
+      <div id="ballStage"></div>
     </div>
     <div class="chart-section" id="bottleChartContainer" style="display: none;">
       <canvas id="rehabChart"></canvas>
@@ -864,7 +841,7 @@ th {
   </div>
 </div>
 
-<!-- 🎮 3D 水瓶控球遊戲分頁 -->
+<!-- 🎮 3D 復健球控球遊戲分頁 -->
 <div id="game-tab" class="tab-content">
   <div class="cards-row">
     <div class="metric-card">
@@ -902,7 +879,7 @@ th {
       <label style="font-weight:700; color:var(--text-muted);">敏銳度：</label>
       <input type="range" id="sensitivityRange" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateSensitivity(this.value)" style="cursor:pointer;">
     </div>
-    <p style="color: var(--text-muted); margin-bottom: 15px; font-weight: 600; text-align: center;">💡 玩法說明：傾斜手腕（擺動水瓶），利用實時傾斜加速度引導「藍色小球」滾入「紅色目標洞」中！</p>
+    <p style="color: var(--text-muted); margin-bottom: 15px; font-weight: 600; text-align: center;">💡 玩法說明：傾斜手腕（擺動復健球），利用實時傾斜加速度引導「藍色小球」滾入「紅色目標洞」中！</p>
    
     <div class="canvas-wrapper">
       <canvas id="gameCanvas" width="450" height="450"></canvas>
@@ -968,41 +945,6 @@ th {
   </div>
 </div>
 
-<!-- ⚡ 肌電訊號分頁 -->
-<div id="emg-tab" class="tab-content">
-  <div class="control-row">
-    <button class="btn btn-warning" id="emgPauseBtn" onclick="toggleEMGPause()">暫停即時更新</button>
-  </div>
-  <div class="cards-row">
-    <div class="metric-card">
-      <div class="metric-label">目前肌電振幅</div>
-      <div class="metric-value-container">
-        <span class="metric-value purple-val" id="emgCurrentVal">0</span><span class="metric-unit">/4095</span>
-      </div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">收縮強度</div>
-      <div class="metric-value-container">
-        <span class="metric-value red-val" id="emgPercentVal">0</span><span class="metric-unit">%</span>
-      </div>
-      <div class="progress-container"><div class="progress-bar" id="emgProgressBar"></div></div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">最大收縮紀錄 (Peak)</div>
-      <div class="metric-value-container">
-        <span class="metric-value orange-val" id="emgPeakVal">0</span><span class="metric-unit"></span>
-      </div>
-      <button style="margin-top:15px; padding:6px 12px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; font-weight:700;" onclick="resetEMGPeak()">重置資料</button>
-    </div>
-  </div>
-
-  <div class="visual-layout">
-    <div class="chart-section" style="height: 320px;">
-      <canvas id="emgChart"></canvas>
-    </div>
-  </div>
-</div>
-
 <!-- 💪 壓力監測儀分頁 -->
 <div id="pressure-tab" class="tab-content">
   <div class="control-row">
@@ -1062,13 +1004,12 @@ th {
             <th width="12%">患者姓名</th>
             <th width="10%">X軸角度</th>
             <th width="10%">Y軸角度</th>
-            <th width="15%">肌電 (EMG)</th>
             <th width="15%">壓力 (ADC)</th>
           </tr>
         </thead>
         <tbody id="cloudRecordTableBody">
           <tr>
-            <td colspan="6" style="color:#94a3b8; text-align:center;">正在連線雲端資料庫...</td>
+            <td colspan="5" style="color:#94a3b8; text-align:center;">正在連線雲端資料庫...</td>
           </tr>
         </tbody>
       </table>
@@ -1244,7 +1185,7 @@ function checkSafetyGuard(calibratedX, calibratedY) {
   }
 }
 
-// ================= 🎮 3D 水瓶控球遊戲邏輯 =================
+// ================= 🎮 3D 復健球控球遊戲邏輯 =================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -1427,7 +1368,6 @@ function uploadToFirebase(dataPayload) {
     doctor: patientData.doctor || "",
     angleX: dataPayload.angleX,
     angleY: dataPayload.angleY,
-    emg: dataPayload.emg,
     adc: dataPayload.adc
   });
 }
@@ -1546,21 +1486,18 @@ function switchTab(tabId, element) {
     document.getElementById('current-breadcrumb').innerText = "系統首頁";
     document.getElementById('panel-title').innerText = "智慧復健系統首頁";
   } else if(tabId === 'bottle-tab') {
-    document.getElementById('current-breadcrumb').innerText = "智慧水瓶監測";
-    document.getElementById('panel-title').innerText = "智慧復健水瓶角度監測";
+    document.getElementById('current-breadcrumb').innerText = "智慧角度(手腕彎曲)";
+    document.getElementById('panel-title').innerText = "智慧復健球角度監測";
   } else if(tabId === 'game-tab') {
-    document.getElementById('current-breadcrumb').innerText = "水瓶控球遊戲";
-    document.getElementById('panel-title').innerText = "3D 水瓶控球趣味復健";
+    document.getElementById('current-breadcrumb').innerText = "3D控球遊戲(手腕穩定、控制)";
+    document.getElementById('panel-title').innerText = "3D 復健球控球趣味復健";
     resetGameBall();
     if (!gameAnimationId) renderGame();
   } else if(tabId === 'tfcc-game-tab') {
-    document.getElementById('current-breadcrumb').innerText = "TFCC 3D 復健宇宙";
+    document.getElementById('current-breadcrumb').innerText = "TFCC 3D 復健宇宙(三角纖維軟骨)";
     document.getElementById('panel-title').innerText = "TFCC 3D 動態視覺復健宇宙 Pro Ultra V7.4";
-  } else if(tabId === 'emg-tab') {
-    document.getElementById('current-breadcrumb').innerText = "肌電訊號監測";
-    document.getElementById('panel-title').innerText = "ESP32 肌電感測器監測";
   } else if(tabId === 'pressure-tab') {
-    document.getElementById('current-breadcrumb').innerText = "壓力握力監測";
+    document.getElementById('current-breadcrumb').innerText = "壓力握力監測(抓握的力氣)";
     document.getElementById('panel-title').innerText = "RFP-10010 壓力握力監測";
   } else if(tabId === 'cloud-tab') {
     document.getElementById('current-breadcrumb').innerText = "雲端歷史紀錄";
@@ -1589,30 +1526,6 @@ const rehabChart = new Chart(ctxBottle, {
   }
 });
 
-const maxEmgDataPoints = 100;
-const ctxEmg = document.getElementById('emgChart').getContext('2d');
-const emgChart = new Chart(ctxEmg, {
-  type: 'line',
-  data: {
-    labels: Array(maxEmgDataPoints).fill(''),
-    datasets: [{
-      label: 'EMG 數值 (0-4095)',
-      data: Array(maxEmgDataPoints).fill(0),
-      borderColor: '#8b5cf6',
-      borderWidth: 2,
-      fill: false,
-      tension: 0,
-      pointRadius: 0
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    scales: { y: { min: 0, max: 4095 } }
-  }
-});
-
 let updateInterval = 100;
 let lastUpdateTime = 0;
 function changeUpdateInterval(val) { updateInterval = parseInt(val); }
@@ -1621,7 +1534,7 @@ function changeUpdateInterval(val) { updateInterval = parseInt(val); }
 const BLE_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 const BLE_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 let bluetoothDevice = null, dataCharacteristic = null;
-let isEmgPaused = false, emgPeakVal = 0, maxWeight = 0.0, adcOffset = 0, currentRawAdc = 0;
+let maxWeight = 0.0, adcOffset = 0, currentRawAdc = 0;
 
 let currentRawAngleX = 0, currentRawAngleY = 0;
 let angleOffsetX = 0, angleOffsetY = 0;
@@ -1669,7 +1582,7 @@ function onDisconnected() {
 
 function handleBLEData(event) {
   const value = event.target.value;
-  if (value.byteLength < 9) return; // 韌體封包已擴充為 9 Bytes (多一個狀態位元)
+  if (value.byteLength < 7) return; // 韌體封包為 7 Bytes (angleX, angleY, adc, status)
 
   const rawX = value.getInt16(0, true);
   const rawY = value.getInt16(2, true);
@@ -1680,15 +1593,14 @@ function handleBLEData(event) {
   const calibratedX = rawX - angleOffsetX;
   const calibratedY = rawY - angleOffsetY;
 
-  const statusByte = value.getUint8(8);
+  const statusByte = value.getUint8(6);
   const imuHealthy = (statusByte & 0x01) === 1;
   updateImuHealthIndicator(imuHealthy);
 
   const payload = {
     angleX: calibratedX,
     angleY: calibratedY,
-    emg: value.getUint16(4, true),
-    adc: value.getUint16(6, true),
+    adc: value.getUint16(4, true),
     imuHealthy: imuHealthy
   };
 
@@ -1743,11 +1655,132 @@ function toggleBottleChart() {
   }
 }
 
+// ================= 🟠 復健球 3D 姿勢模擬 (Three.js) =================
+(function initRehabBall() {
+  const stageEl = document.getElementById('ballStage');
+  if (!stageEl || typeof THREE === 'undefined') return;
+
+  const BUMP = 0.03; // 凹點與接縫的立體感強度，太強或太弱可調整這個數字
+
+  // 程式內建立橘色橄欖球形握力球的貼圖：接縫線 + 一圈圈的小凹點
+function makeBallCanvases() {
+  const TW = 1024, TH = 512;
+  const colorCv = document.createElement('canvas'); colorCv.width = TW; colorCv.height = TH;
+  const bumpCv = document.createElement('canvas'); bumpCv.width = TW; bumpCv.height = TH;
+  const c = colorCv.getContext('2d'), b = bumpCv.getContext('2d');
+
+  c.fillStyle = '#f26126'; c.fillRect(0, 0, TW, TH);
+  b.fillStyle = '#a0a0a0'; b.fillRect(0, 0, TW, TH);
+
+  const ROWS = 56, DOT = 0.03;
+  for (let r = 1; r < ROWS; r++) {
+    const y = (r / ROWS) * TH;
+    const sinT = Math.sin(Math.PI * y / TH);
+    if (sinT < 0.12) continue;
+    const n = Math.round(84 * sinT);
+    const ry = DOT / 0.0061;
+    const rx = Math.min(DOT / (0.0046 * sinT), 70);
+    for (let k = 0; k < n; k++) {
+      const x0 = ((k + (r % 2 ? 0.5 : 0)) / n) * TW;
+      for (const dx of [-TW, 0, TW]) {
+        const x = x0 + dx;
+        if (x < -rx || x > TW + rx) continue;
+        [[c, 'rgba(176,52,14,0.55)', 'rgba(176,52,14,0)'],
+         [b, 'rgba(60,60,60,1)', 'rgba(160,160,160,1)']].forEach(([ctx, inner, outer]) => {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(rx / ry, 1);
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, ry);
+          g.addColorStop(0, inner); g.addColorStop(1, outer);
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(0, 0, ry, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        });
+      }
+    }
+  }
+
+  [0.25, 0.75].forEach(u => {
+    const xs = u * TW;
+    const gb = b.createLinearGradient(xs - 9, 0, xs + 9, 0);
+    gb.addColorStop(0, 'rgba(160,160,160,0)');
+    gb.addColorStop(0.5, 'rgba(20,20,20,1)');
+    gb.addColorStop(1, 'rgba(160,160,160,0)');
+    b.fillStyle = gb; b.fillRect(xs - 9, 0, 18, TH);
+    const gc = c.createLinearGradient(xs - 6, 0, xs + 6, 0);
+    gc.addColorStop(0, 'rgba(150,40,10,0)');
+    gc.addColorStop(0.5, 'rgba(150,40,10,0.85)');
+    gc.addColorStop(1, 'rgba(150,40,10,0)');
+    c.fillStyle = gc; c.fillRect(xs - 6, 0, 12, TH);
+  });
+  return { colorCv, bumpCv };
+}
+
+  const VIEW_W = 360, VIEW_H = 400;
+  let ballRenderer;
+  try {
+    ballRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  } catch (e) {
+    stageEl.innerText = '此裝置不支援 3D 顯示';
+    return;
+  }
+  ballRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  ballRenderer.setSize(VIEW_W, VIEW_H, false);
+  ballRenderer.outputEncoding = THREE.sRGBEncoding;
+  ballRenderer.setClearColor(0x000000, 0);
+  stageEl.appendChild(ballRenderer.domElement);
+
+  const ballScene = new THREE.Scene();
+  const ballCamera = new THREE.PerspectiveCamera(35, VIEW_W / VIEW_H, 0.1, 50);
+  ballCamera.position.set(0, 0, 5.6);
+
+  ballScene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 0.65);
+  keyLight.position.set(-3, 4, 5);
+  ballScene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0xffd2b0, 0.2);
+  rimLight.position.set(4, -2, -3);
+  ballScene.add(rimLight);
+
+  const { colorCv, bumpCv } = makeBallCanvases();
+  const colorTex = new THREE.CanvasTexture(colorCv);
+  colorTex.encoding = THREE.sRGBEncoding;
+  const bumpTex = new THREE.CanvasTexture(bumpCv);
+  const maxAniso = ballRenderer.capabilities.getMaxAnisotropy();
+  [colorTex, bumpTex].forEach(t => { t.wrapS = THREE.RepeatWrapping; t.anisotropy = maxAniso; });
+
+  const ballMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 96, 64),
+    new THREE.MeshStandardMaterial({ map: colorTex, bumpMap: bumpTex, bumpScale: BUMP, roughness: 0.8, metalness: 0 })
+  );
+  ballMesh.scale.set(0.75, 1.05, 0.75); // 拉長成橢圓（橄欖球）形狀
+  ballScene.add(ballMesh);
+
+  // 姿勢：沿用原本的轉動規則 (前後傾斜 X、左右翻轉 Y，預設側轉 25° 以看見接縫)
+  const D2R = Math.PI / 180;
+  const target = { x: 0, y: 25 * D2R };
+  const cur = { x: 0, y: 25 * D2R };
+  window.updateBallPose = function (angleX, angleY) {
+    target.x = angleX * D2R;
+    target.y = (angleY + 25) * D2R;
+  };
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (currentActiveTab !== 'bottle-tab') return; // 不在此分頁時不繪製，節省效能
+    cur.x += (target.x - cur.x) * 0.3;
+    cur.y += (target.y - cur.y) * 0.3;
+    ballMesh.rotation.set(cur.x, cur.y, 0);
+    ballRenderer.render(ballScene, ballCamera);
+  }
+  tick();
+})();
+
 function distributeData(data) {
   if (data.angleX !== undefined && data.angleY !== undefined) {
     document.getElementById('valX').innerText = data.angleX;
     document.getElementById('valY').innerText = data.angleY;
-    document.getElementById('bottleStage').style.transform = `rotateX(${-data.angleX}deg) rotateY(${data.angleY + 25}deg)`;
+    if (window.updateBallPose) window.updateBallPose(data.angleX, data.angleY);
 
     checkSafetyGuard(data.angleX, data.angleY);
 
@@ -1795,36 +1828,8 @@ function distributeData(data) {
     }
   }
 
-  if (data.emg !== undefined) handleEMG(data.emg);
   if (data.adc !== undefined) handlePressure(data.adc);
 }
-
-function handleEMG(newValue) {
-  document.getElementById('emgCurrentVal').innerText = newValue;
-  let percent = Math.round((newValue / 4095) * 100);
-  document.getElementById('emgPercentVal').innerText = percent;
-  document.getElementById('emgProgressBar').style.width = Math.min(percent, 100) + '%';
-
-  if (newValue > emgPeakVal) {
-    emgPeakVal = newValue;
-    document.getElementById('emgPeakVal').innerText = emgPeakVal;
-  }
-
-  if (!isEmgPaused && currentActiveTab === 'emg-tab') {
-    const chartData = emgChart.data.datasets[0].data;
-    chartData.push(newValue);
-    chartData.shift();
-    emgChart.update('none');
-  }
-}
-
-function toggleEMGPause() {
-  isEmgPaused = !isEmgPaused;
-  const btn = document.getElementById('emgPauseBtn');
-  btn.innerText = isEmgPaused ? "恢復即時更新" : "暫停即時更新";
-  btn.className = isEmgPaused ? "btn btn-success" : "btn btn-warning";
-}
-function resetEMGPeak() { emgPeakVal = 0; document.getElementById('emgPeakVal').innerText = "0"; }
 
 function handlePressure(rawAdc) {
   currentRawAdc = rawAdc;
@@ -1895,7 +1900,6 @@ function loadCloudData() {
         <td>${item.patientName || "—"}</td>
         <td style="color:#4f46e5; font-weight:bold;">${item.angleX ?? 0}°</td>
         <td style="color:#f43f5e; font-weight:bold;">${item.angleY ?? 0}°</td>
-        <td style="color:#8b5cf6; font-weight:bold;">${item.emg ?? 0}</td>
         <td style="color:#0ea5e9; font-weight:bold;">${item.adc ?? 0}</td>
       `;
       tableBody.appendChild(row);
@@ -1934,12 +1938,12 @@ async function exportToCSV() {
     }
 
     let csvContent = "\uFEFF";
-    csvContent += "時間,病患姓名,X軸角度(度),Y軸角度(度),肌電(EMG),壓力(ADC)\n";
+    csvContent += "時間,病患姓名,X軸角度(度),Y軸角度(度),壓力(ADC)\n";
 
     let totalCount = 0;
     Object.keys(data).reverse().forEach(key => {
       const row = data[key];
-      csvContent += `"${row.dateTime}","${row.patientName}",${row.angleX},${row.angleY},${row.emg},${row.adc}\n`;
+      csvContent += `"${row.dateTime}","${row.patientName}",${row.angleX},${row.angleY},${row.adc}\n`;
       totalCount++;
     });
 
@@ -1978,11 +1982,10 @@ async function sendManualReport() {
   const pName = patientData.name || "未設定";
   const x = document.getElementById('valX').innerText;
   const y = document.getElementById('valY').innerText;
-  const emg = document.getElementById('emgCurrentVal').innerText;
   const adc = document.getElementById('adcVal').innerText;
   const reps = document.getElementById('repCountDisplay').innerText;
 
-  const messageText = `[復健即時報告] 患者: ${pName} | 完成次數: ${reps}次 | 角度: X=${x}°, Y=${y}° | 肌電: ${emg} | 壓力: ${adc}`;
+  const messageText = `[復健即時報告] 患者: ${pName} | 完成次數: ${reps}次 | 角度: X=${x}°, Y=${y}° | 壓力: ${adc}`;
  
   const tokenInputElem = document.getElementById('input-linetoken');
   const token = (tokenInputElem && tokenInputElem.value.trim() !== "")

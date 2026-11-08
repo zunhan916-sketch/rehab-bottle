@@ -18,6 +18,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg-color: #f1f5f9;
@@ -637,6 +640,111 @@ th {
   .visual-container { width: 100%; }
   .info-panel { padding: 20px; }
 }
+
+/* =====================================================================
+   新版面覆蓋層：只改外觀，不動任何 id / class / JS
+   方向：復健「量測儀器」感——深杉綠 + 紙感淺灰綠底，數據卡片下緣有量角器刻度
+   ===================================================================== */
+:root {
+  --bg-color: #eef1ed;
+  --surface: #fbfcfa;
+  --line: #d6ddd3;
+  --line-strong: #9fb0a8;
+  --sidebar-bg: #10322d;
+  --sidebar-text: #a6beb6;
+  --sidebar-active: #f0b43c;
+  --text-main: #14211e;
+  --text-muted: #5b6a65;
+  --header-dark: #3d4d48;
+
+  --card-blue: #0b6e63;    /* X 軸：深青綠 */
+  --card-red: #c1402e;     /* Y 軸／代償：磚紅 */
+  --card-orange: #a56f06;  /* 壓力：赭黃 */
+  --card-purple: #5f5499;  /* 次數：灰紫 */
+  --card-gray: var(--surface);
+}
+
+* { font-family: "Noto Sans TC", "Microsoft JhengHei", -apple-system, "Segoe UI", sans-serif; }
+.sidebar-brand, .metric-value, .metric-unit { font-family: "Manrope", "Noto Sans TC", sans-serif; font-variant-numeric: tabular-nums; }
+
+:focus-visible { outline: 3px solid var(--sidebar-active); outline-offset: 2px; }
+
+/* ---- 左側導覽：標題靠左、選中項改為填色 + 琥珀色刻度 ---- */
+.sidebar { width: 232px; padding-top: 28px; box-shadow: none; }
+.sidebar-brand { text-align: left; padding: 0 25px; font-size: 1.15rem; font-weight: 800; letter-spacing: .02em; margin-bottom: 26px; }
+.nav-item { padding: 15px 25px; font-weight: 500; border-left-width: 4px; }
+.nav-item:hover { background: rgba(255,255,255,.06); }
+.nav-item.active { background: #1a4a43; color: #fff; font-weight: 700; border-left-color: var(--sidebar-active); }
+
+/* ---- 主區：留白加大，面板一律細框、無陰影，圓角分層 ---- */
+.main-content { padding: 32px 44px; }
+.top-control-panel, .home-container, .visual-container, .chart-section,
+.game-container-card, .record-section, .metric-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.top-control-panel { border-radius: 10px; }
+.home-container, .visual-container, .chart-section, .game-container-card, .record-section { border-radius: 10px; }
+.metric-card { border-radius: 6px; }
+.breadcrumb { font-weight: 400; }
+
+/* ---- 患者資訊：由深色漸層塊改成淺色資料條，讓視線留給量測數據 ---- */
+.info-panel { background: var(--surface); color: var(--text-main); border: 1px solid var(--line); border-left: 5px solid var(--sidebar-bg); border-radius: 6px; box-shadow: none; padding: 22px 28px; }
+.info-panel h2 { font-size: 1.35rem; margin-bottom: 16px; letter-spacing: 0; }
+.info-grid { border-bottom-color: var(--line); }
+.info-item { color: var(--text-muted); }
+.info-item span.highlight { color: var(--text-main); font-weight: 700; }
+.info-date { color: var(--text-muted); }
+
+/* ---- 數據卡片：本版面唯一的「記憶點」——數字靠左，下緣為量角器刻度 ---- */
+.metric-card { padding: 22px 24px 38px; }
+.metric-card:hover { transform: none; }
+.metric-card::after {
+  content: ""; position: absolute; left: 24px; right: 24px; bottom: 0; height: 14px; pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, var(--line-strong) 0 1.5px, transparent 1.5px 40px) bottom / 100% 14px no-repeat,
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 8px) bottom / 100% 7px no-repeat;
+}
+.metric-label { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: .95rem; margin-bottom: 10px; }
+.metric-value-container { justify-content: flex-start; }
+.metric-value { font-size: 3.4rem; font-weight: 800; letter-spacing: -.02em; }
+.metric-unit { font-weight: 500; }
+#bottle-tab.chart-collapsed .visual-container { background: var(--surface); border: 1px solid var(--line); }
+#bottle-tab.chart-collapsed .metric-card { background: var(--surface); border: 1px solid var(--line); padding: 28px 24px 42px; }
+
+/* ---- 表單 ---- */
+.form-group label { font-weight: 500; color: var(--text-muted); }
+.form-group input, .form-group select, .form-group textarea { border-radius: 6px; border-color: var(--line-strong); background: #fff; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--card-blue); box-shadow: 0 0 0 3px rgba(11,110,99,.15); }
+
+/* ---- 按鈕：小圓角、無陰影、顏色語意對應（主要＝杉綠，警告＝赭黃，成功＝綠，危險＝磚紅） ---- */
+.btn { border-radius: 6px; font-weight: 700; box-shadow: none; padding: 10px 20px; }
+.btn-primary { background: #0f5c52; }
+.btn-primary:hover { background: #0b4a42; transform: none; }
+.btn-warning { background: #a56f06; }
+.btn-warning:hover { background: #8a5c04; }
+.btn-success { background: #2f7d4f; }
+.btn-success:hover { background: #256640; }
+.btn-danger { background: #c1402e; }
+.btn-danger:hover { background: #a43425; }
+.select-interval { border-radius: 6px; border-color: var(--line-strong); font-weight: 500; }
+.progress-container { background: var(--line); border-radius: 4px; height: 6px; }
+.progress-bar { border-radius: 4px; }
+
+/* ---- 表格：文字靠左好讀、表頭淡綠底、列 hover ---- */
+.table-container { border-color: var(--line); border-radius: 6px; }
+th, td { text-align: left; padding: 12px 16px; border-bottom-color: #e7ece4; font-variant-numeric: tabular-nums; }
+th { background: #e8eee6; color: var(--text-main); border-bottom: 1px solid var(--line-strong); }
+tbody tr:hover td { background: #f3f6f1; }
+
+/* ---- 遊戲區：球場與 TFCC 深色區同步換成偏綠的色調 ---- */
+#gameCanvas { background: #f3f6f1; border: 3px solid var(--line-strong); border-radius: 10px; box-shadow: none; }
+.tfcc-game-wrapper { background-color: #0c1a17; border-radius: 10px; }
+.tfcc-game-wrapper h1 { color: #8fd8c8; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 900px) { .main-content { padding: 75px 15px 20px; } }
 </style>
 </head>
 <body>
@@ -1864,6 +1972,20 @@ function resetPeak() { maxWeight = 0.0; document.getElementById('peakWeightVal')
 let fetchedCloudRecords = [];
 let currentCloudRef = null;
 
+// 將雲端/使用者輸入的文字轉成安全的 HTML，避免 XSS
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+// CSV 欄位跳脫：雙引號加倍，並避免以 = + - @ 開頭被 Excel 當成公式執行
+function csvEscape(value) {
+  let text = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
 function loadCloudData() {
   const patientId = patientData.id ? patientData.id.trim() : "1";
   const tableBody = document.getElementById('cloudRecordTableBody');
@@ -1884,7 +2006,7 @@ function loadCloudData() {
     const data = snapshot.val();
 
     if (!data) {
-      tableBody.innerHTML = `<tr><td colspan="6" style="color:#94a3b8; text-align:center;">目前雲端資料庫尚無病歷號 [ ${patientId} ] 的紀錄</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8; text-align:center;">目前雲端資料庫尚無病歷號 [ ${escapeHtml(patientId)} ] 的紀錄</td></tr>`;
       statusText.innerText = `✅ 讀取完畢 (0 筆紀錄)`;
       statusText.style.color = "#10b981";
       return;
@@ -1896,11 +2018,11 @@ function loadCloudData() {
 
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td style="font-weight:600; color:#475569;">${item.dateTime || "—"}</td>
-        <td>${item.patientName || "—"}</td>
-        <td style="color:#4f46e5; font-weight:bold;">${item.angleX ?? 0}°</td>
-        <td style="color:#f43f5e; font-weight:bold;">${item.angleY ?? 0}°</td>
-        <td style="color:#0ea5e9; font-weight:bold;">${item.adc ?? 0}</td>
+        <td style="font-weight:600; color:#475569;">${escapeHtml(item.dateTime || "—")}</td>
+        <td>${escapeHtml(item.patientName || "—")}</td>
+        <td style="color:#4f46e5; font-weight:bold;">${escapeHtml(item.angleX ?? 0)}°</td>
+        <td style="color:#f43f5e; font-weight:bold;">${escapeHtml(item.angleY ?? 0)}°</td>
+        <td style="color:#0ea5e9; font-weight:bold;">${escapeHtml(item.adc ?? 0)}</td>
       `;
       tableBody.appendChild(row);
     });
@@ -1943,7 +2065,7 @@ async function exportToCSV() {
     let totalCount = 0;
     Object.keys(data).reverse().forEach(key => {
       const row = data[key];
-      csvContent += `"${row.dateTime}","${row.patientName}",${row.angleX},${row.angleY},${row.adc}\n`;
+      csvContent += `${csvEscape(row.dateTime)},${csvEscape(row.patientName)},${Number(row.angleX) || 0},${Number(row.angleY) || 0},${Number(row.adc) || 0}\n`;
       totalCount++;
     });
 

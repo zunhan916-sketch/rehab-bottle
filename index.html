@@ -745,9 +745,40 @@ tbody tr:hover td { background: #f3f6f1; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 @media (max-width: 900px) { .main-content { padding: 75px 15px 20px; } }
+
+/* ================= 🔫 握力射擊靶場 專屬樣式 ================= */
+#shoot-tab .shoot-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: center; margin-bottom: 14px; }
+#shoot-tab .shoot-controls label { font-weight: 700; color: var(--text-muted); font-size: .9rem; display: inline-flex; align-items: center; gap: 6px; }
+#shoot-tab .shoot-controls input[type="range"] { cursor: pointer; width: 110px; }
+.shoot-canvas-wrap { width: 100%; max-width: 800px; }
+#shootCanvas { width: 100%; height: auto; aspect-ratio: 8 / 5; display: block; background: #0c1a17; border: 3px solid var(--line-strong); border-radius: 10px; touch-action: none; cursor: crosshair; }
+.shoot-gauge { position: relative; height: 18px; background: var(--line); border-radius: 9px; overflow: hidden; margin-top: 14px; }
+.shoot-gauge-fill { height: 100%; width: 0; background: var(--card-blue); }
+.shoot-gauge-fill.armed { background: var(--card-red); }
+.shoot-gauge-mark { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--sidebar-active); }
+.shoot-gauge-text { display: flex; justify-content: space-between; font-size: .85rem; color: var(--text-muted); font-weight: 600; margin-top: 6px; }
+#shootHint { text-align: center; color: var(--text-muted); font-weight: 600; margin-top: 10px; min-height: 1.3em; }
+
+/* ================= 🧭 方向校準視窗 ================= */
+#oriModal { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(12, 26, 23, 0.8); align-items: center; justify-content: center; padding: 20px; }
+#oriModal.show { display: flex; }
+.ori-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 28px 32px; max-width: 460px; width: 100%; text-align: center; }
+.ori-title { font-size: 1.3rem; font-weight: 800; color: var(--sidebar-bg); }
+.ori-msg { margin: 14px 0 8px; font-weight: 600; color: var(--text-main); white-space: pre-line; line-height: 1.6; }
+.ori-sub { font-size: 1.5rem; font-weight: 800; color: var(--card-orange); min-height: 2rem; }
 </style>
 </head>
 <body>
+
+<!-- 🧭 方向校準視窗 -->
+<div id="oriModal">
+  <div class="ori-card">
+    <div class="ori-title" id="oriTitle">方向校準</div>
+    <div class="ori-msg" id="oriMsg"></div>
+    <div class="ori-sub" id="oriSub"></div>
+    <button class="btn btn-warning" id="oriCancelBtn" onclick="oriCancel()" style="margin-top:14px;">取消校準</button>
+  </div>
+</div>
 
 <!-- 📱 手機端選單抬頭列 -->
 <div class="mobile-header">
@@ -776,6 +807,10 @@ tbody tr:hover td { background: #f3f6f1; }
     <span class="nav-icon">🪐</span>
     <span>TFCC 3D 復健宇宙(三角纖維軟骨)</span>
   </div>
+  <div class="nav-item" onclick="switchTab('shoot-tab', this); closeSidebarMobile();">
+    <span class="nav-icon">🔫</span>
+    <span>握力射擊靶場(手腕瞄準、握力)</span>
+  </div>
   <div class="nav-item" onclick="switchTab('pressure-tab', this); closeSidebarMobile();">
     <span class="nav-icon">💪</span>
     <span>壓力握力評估(抓握的力氣)</span>
@@ -797,11 +832,23 @@ tbody tr:hover td { background: #f3f6f1; }
 <div class="top-control-panel">
   <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
     <button class="btn btn-primary" id="globalConnectBtn" onclick="connectBluetooth()">🔵 一鍵連線藍芽裝置</button>
+    <button class="btn btn-primary" id="oriBtn" onclick="oriStart()">🧭 方向校準</button>
+    <span id="oriStatusTag" style="font-weight: 700; font-size: 0.9rem;">🧭 方向:未校準</span>
+    <button id="oriClearBtn" onclick="oriClear()" style="display:none; padding:3px 9px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; font-weight:700; font-size:0.8rem;">清除</button>
     <button class="btn btn-success" onclick="sendManualReport()">📤 發送當下報表至 LINE</button>
     <span id="globalStatusText" style="font-weight: 700; color: var(--text-muted); font-size: 0.95rem;">硬體狀態：🔴 尚未連接</span>
   </div>
 
   <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label for="safetyLevelSelect" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem;">⚠️ 姿勢警示：</label>
+      <select id="safetyLevelSelect" class="select-interval" onchange="changeSafetyLevel(this.value)">
+        <option value="off">關閉</option>
+        <option value="loose" selected>寬鬆</option>
+        <option value="standard">標準 (較敏感)</option>
+      </select>
+    </div>
+
     <div style="display: flex; align-items: center; gap: 6px;">
       <label for="updateIntervalSelect" style="font-weight: 700; color: var(--text-muted); font-size: 0.9rem;">💻 畫面刷新：</label>
       <select id="updateIntervalSelect" class="select-interval" onchange="changeUpdateInterval(this.value)">
@@ -1054,6 +1101,88 @@ tbody tr:hover td { background: #f3f6f1; }
 </div>
 
 <!-- 💪 壓力監測儀分頁 -->
+<!-- 🔫 握力射擊靶場分頁 -->
+<div id="shoot-tab" class="tab-content">
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">射擊得分</div>
+      <div class="metric-value-container">
+        <span class="metric-value blue-val" id="shootScore">0</span><span class="metric-unit">分</span>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">剩餘時間</div>
+      <div class="metric-value-container">
+        <span class="metric-value orange-val" id="shootTime">60</span><span class="metric-unit">秒</span>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">命中率</div>
+      <div class="metric-value-container">
+        <span class="metric-value purple-val" id="shootAcc">0</span><span class="metric-unit">%</span>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">連擊</div>
+      <div class="metric-value-container">
+        <span class="metric-value red-val" id="shootCombo">0</span><span class="metric-unit">連擊</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="game-container-card">
+    <div class="shoot-controls">
+      <button class="btn btn-success" onclick="startShoot()">▶️ 開始 / 重來</button>
+      <button class="btn btn-warning" id="shootPauseBtn" onclick="toggleShootPause()">⏸️ 暫停</button>
+      <button class="btn btn-primary" onclick="oriStart()">🧭 方向校準(球體)</button>
+      <button class="btn btn-primary" onclick="shootZeroAim()">🎯 瞄準歸零</button>
+      <button class="btn btn-primary" id="shootGripTestBtn" onclick="shootGripTest()">🤏 握力測試(自動設門檻)</button>
+    </div>
+    <div class="shoot-controls">
+      <label>難度
+        <select id="shootDiffSelect" class="select-interval" onchange="setShootDiff(this.value)">
+          <option value="easy">🟢 簡單</option>
+          <option value="normal" selected>🟡 標準</option>
+          <option value="hard">🔴 挑戰</option>
+        </select>
+      </label>
+      <label>時間
+        <select id="shootTimeSelect" class="select-interval" onchange="setShootTime(this.value)">
+          <option value="30">30 秒</option>
+          <option value="60" selected>60 秒</option>
+          <option value="90">90 秒</option>
+        </select>
+      </label>
+      <label>瞄準靈敏度
+        <input type="range" id="shootSensRange" min="0.6" max="2.0" step="0.1" value="1.0" oninput="setShootSens(this.value)">
+        <span id="shootSensVal">1.0x</span>
+      </label>
+      <label>開火門檻
+        <input type="range" id="shootThRange" min="50" max="3000" step="50" value="500" oninput="setShootThreshold(this.value)">
+        <span id="shootThVal">500</span>
+      </label>
+      <label><input type="checkbox" id="shootInvX" onchange="shootSetInv()">↔ 反轉左右</label>
+      <label><input type="checkbox" id="shootInvY" onchange="shootSetInv()">↕ 反轉上下</label>
+    </div>
+
+    <p style="color: var(--text-muted); margin-bottom: 12px; font-weight: 600; text-align: center;">💡 玩法:轉動手腕移動準星,握緊握力器達到門檻即開火。靶心 30 分、中圈 20 分、外圈 10 分;金色靶 50 分並 +2 秒;藍色「友軍」靶不能打(-20 分)。準星穩定時開火可額外 +5 分。</p>
+
+    <div class="shoot-canvas-wrap">
+      <canvas id="shootCanvas" width="800" height="500"></canvas>
+      <div class="shoot-gauge">
+        <div class="shoot-gauge-fill" id="shootGaugeFill"></div>
+        <div class="shoot-gauge-mark"></div>
+      </div>
+      <div class="shoot-gauge-text">
+        <span>握力:<span id="shootPressureVal">0</span></span>
+        <span id="shootModeTag">🖱️ 滑鼠測試模式</span>
+        <span>開火門檻(黃線)</span>
+      </div>
+      <div id="shootHint">尚未連線藍芽時,可用滑鼠瞄準、點擊或按空白鍵開火來測試。</div>
+    </div>
+  </div>
+</div>
+
 <div id="pressure-tab" class="tab-content">
   <div class="control-row">
     <button class="btn btn-warning" id="tareBtn" onclick="zeroCalibration()">秤重歸零校準</button>
@@ -1235,62 +1364,83 @@ let prevAngleX = 0;
 let prevAngleY = 0;
 let prevSafetyCheckTime = 0;
 let alertTimeoutId = null;
-let alertConsecutiveCount = 0;
 
-// 注意：SPEED_THRESHOLD 單位是「度/秒」的真實角速度，不受 updateInterval 更新頻率影響。
-// 這個數值是估算的起始值，建議實際測試擺動速度後再微調。
-const SPEED_THRESHOLD = 180;
-const COMPENSATION_THRESHOLD = 35;
+// 靈敏度分級(速度單位:度/秒;comp 為代償角度;hold 為「持續多久才警示」毫秒)
+const SAFETY_LEVELS = {
+  off:      null,
+  loose:    { speed: 300, comp: 50, speedHold: 300, compHold: 1000 },
+  standard: { speed: 180, comp: 35, speedHold: 300, compHold: 800 }
+};
+let safetyLevel = 'loose';
+let safetyGraceUntil = 0;     // 此時間之前不判斷(剛連線、剛校準時角度會劇烈變動)
+let hasAngleZeroRef = false;  // 是否已有「中立姿勢」參考(角度歸零或方向校準)
+let safetyCandType = '', safetyCandSince = 0, lastSafetyBeep = 0;
+
+function hideSafetyAlert() {
+  document.getElementById('globalAlertBanner').style.display = "none";
+  document.body.classList.remove('alert-mode');
+  if (alertTimeoutId) { clearTimeout(alertTimeoutId); alertTimeoutId = null; }
+}
+
+function changeSafetyLevel(v) {
+  safetyLevel = v;
+  safetyCandType = '';
+  hideSafetyAlert();
+}
 
 function checkSafetyGuard(calibratedX, calibratedY) {
   const now = Date.now();
-  const dtSec = prevSafetyCheckTime > 0 ? (now - prevSafetyCheckTime) / 1000 : 0;
+  const gap = prevSafetyCheckTime > 0 ? now - prevSafetyCheckTime : Infinity;
   prevSafetyCheckTime = now;
 
   const diffX = Math.abs(calibratedX - prevAngleX);
   const diffY = Math.abs(calibratedY - prevAngleY);
- 
   prevAngleX = calibratedX;
   prevAngleY = calibratedY;
 
-  // 換算成真實角速度（度/秒），dtSec 過小或為0時跳過本次速度判斷，避免除以極小值暴衝
-  const angularSpeedX = dtSec > 0.01 ? diffX / dtSec : 0;
-  const angularSpeedY = dtSec > 0.01 ? diffY / dtSec : 0;
+  // 新連線,或資料中斷太久後恢復:給 5 秒緩衝讓濾波器與姿勢穩定
+  if (gap > 1500) safetyGraceUntil = Math.max(safetyGraceUntil, now + 5000);
 
-  let isAlertCandidate = false;
-  let alertMsg = "";
+  const cfg = SAFETY_LEVELS[safetyLevel];
+  const exerciseTab = (currentActiveTab === 'bottle-tab' || currentActiveTab === 'game-tab');
+  if (!cfg || !exerciseTab) {
+    safetyCandType = '';
+    if (document.getElementById('globalAlertBanner').style.display === 'flex') hideSafetyAlert();
+    return;
+  }
+  if (now < safetyGraceUntil) { safetyCandType = ''; return; }
 
-  if (angularSpeedX > SPEED_THRESHOLD || angularSpeedY > SPEED_THRESHOLD) {
-    isAlertCandidate = true;
-    alertMsg = "⚠️ 警示：動作過速！請放慢手腕擺動速度。";
-  }
-  else if (Math.abs(calibratedY) > COMPENSATION_THRESHOLD) {
-    isAlertCandidate = true;
-    alertMsg = `⚠️ 警示：姿勢歪斜代償 (Y軸: ${calibratedY}°)！請保持手腕平穩。`;
+  // 換算成真實角速度(度/秒);dt 過小時跳過,避免封包擠在一起時除以極小值暴衝
+  const dtSec = gap / 1000;
+  const angularSpeed = dtSec > 0.01 ? Math.max(diffX, diffY) / dtSec : 0;
+
+  let type = '', msg = '';
+  if (angularSpeed > cfg.speed) {
+    type = 'speed';
+    msg = "⚠️ 警示:動作過速!請放慢手腕擺動速度。";
+  } else if ((oriCal || hasAngleZeroRef) && Math.abs(calibratedY) > cfg.comp) {
+    // 沒有中立參考時,Y 軸絕對角度取決於感測器怎麼裝,不具意義,所以不判斷代償
+    type = 'comp';
+    msg = `⚠️ 警示:姿勢歪斜代償 (Y軸: ${calibratedY}°)!請保持手腕平穩。`;
   }
 
-  if (isAlertCandidate) {
-    alertConsecutiveCount++;
-  } else {
-    alertConsecutiveCount = 0;
-  }
+  if (!type) { safetyCandType = ''; return; }
+
+  // 必須「持續」超標一段時間才警示,瞬間抖動不算
+  if (type !== safetyCandType) { safetyCandType = type; safetyCandSince = now; }
+  const hold = type === 'speed' ? cfg.speedHold : cfg.compHold;
+  if (now - safetyCandSince < hold) return;
 
   const alertBanner = document.getElementById('globalAlertBanner');
-  const alertMsgSpan = document.getElementById('alertMessage');
+  document.getElementById('alertMessage').innerText = msg;
+  alertBanner.style.display = "flex";
+  document.body.classList.add('alert-mode');
 
-  if (alertConsecutiveCount >= 2) {
-    alertBanner.style.display = "flex";
-    alertMsgSpan.innerText = alertMsg;
-    document.body.classList.add('alert-mode');
-    playWarningBeep();
+  // 提示音最多每 3 秒一次
+  if (now - lastSafetyBeep > 3000) { lastSafetyBeep = now; playWarningBeep(); }
 
-    if (alertTimeoutId) clearTimeout(alertTimeoutId);
-    alertTimeoutId = setTimeout(() => {
-      alertBanner.style.display = "none";
-      document.body.classList.remove('alert-mode');
-      alertConsecutiveCount = 0;
-    }, 1200);
-  }
+  if (alertTimeoutId) clearTimeout(alertTimeoutId);
+  alertTimeoutId = setTimeout(() => { hideSafetyAlert(); safetyCandType = ''; }, 1200);
 }
 
 // ================= 🎮 3D 復健球控球遊戲邏輯 =================
@@ -1567,6 +1717,7 @@ function switchTab(tabId, element) {
     cancelAnimationFrame(gameAnimationId);
     gameAnimationId = null;
   }
+  if (tabId !== 'shoot-tab' && previousTab === 'shoot-tab') leaveShootTab();
 
   // 🪐 【自動斷開與提醒重新連接藍芽 logic】
   if (tabId === 'tfcc-game-tab') {
@@ -1604,6 +1755,10 @@ function switchTab(tabId, element) {
   } else if(tabId === 'tfcc-game-tab') {
     document.getElementById('current-breadcrumb').innerText = "TFCC 3D 復健宇宙(三角纖維軟骨)";
     document.getElementById('panel-title').innerText = "TFCC 3D 動態視覺復健宇宙 Pro Ultra V7.4";
+  } else if(tabId === 'shoot-tab') {
+    document.getElementById('current-breadcrumb').innerText = "握力射擊靶場(手腕瞄準、握力)";
+    document.getElementById('panel-title').innerText = "握力射擊靶場";
+    enterShootTab();
   } else if(tabId === 'pressure-tab') {
     document.getElementById('current-breadcrumb').innerText = "壓力握力監測(抓握的力氣)";
     document.getElementById('panel-title').innerText = "RFP-10010 壓力握力監測";
@@ -1692,8 +1847,14 @@ function handleBLEData(event) {
   const value = event.target.value;
   if (value.byteLength < 7) return; // 韌體封包為 7 Bytes (angleX, angleY, adc, status)
 
-  const rawX = value.getInt16(0, true);
-  const rawY = value.getInt16(2, true);
+  const hwX = value.getInt16(0, true);
+  const hwY = value.getInt16(2, true);
+  // 韌體 13 Bytes 封包才有加速度 (int16 ax, ay, az);舊韌體為 7 Bytes
+  const accRaw = value.byteLength >= 13 ? [value.getInt16(7, true), value.getInt16(9, true), value.getInt16(11, true)] : null;
+  oriFeed(hwX, hwY, accRaw);
+  const oriAng = oriApply(); // 已方向校準:x=上傾角、y=右傾角;否則 null 沿用韌體角度
+  const rawX = oriAng ? oriAng.x : hwX;
+  const rawY = oriAng ? oriAng.y : hwY;
 
   currentRawAngleX = rawX;
   currentRawAngleY = rawY;
@@ -1711,6 +1872,8 @@ function handleBLEData(event) {
     adc: value.getUint16(4, true),
     imuHealthy: imuHealthy
   };
+
+  if (currentActiveTab === 'shoot-tab') shooterInput(calibratedX, calibratedY, payload.adc);
 
   const now = Date.now();
 
@@ -1737,6 +1900,8 @@ function updateImuHealthIndicator(isHealthy) {
 function zeroBottleAngleCalibration() {
   angleOffsetX = currentRawAngleX;
   angleOffsetY = currentRawAngleY;
+  hasAngleZeroRef = true;
+  safetyGraceUntil = Date.now() + 3000;
 
   const btn = document.getElementById('bottleZeroBtn');
   btn.innerText = "✨ 角度已歸零";
@@ -1890,7 +2055,7 @@ function distributeData(data) {
     document.getElementById('valY').innerText = data.angleY;
     if (window.updateBallPose) window.updateBallPose(data.angleX, data.angleY);
 
-    checkSafetyGuard(data.angleX, data.angleY);
+    if (currentActiveTab !== 'shoot-tab') checkSafetyGuard(data.angleX, data.angleY);
 
     if (currentActiveTab === 'game-tab') {
       updateGamePhysics(data.angleX, data.angleY);
@@ -2797,6 +2962,807 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     });
     cameraFeed.start().catch(() => { statusTag.innerText = "❌ 鏡頭配置失敗"; });
 }
+
+// ================= 🧭 全域方向校準(球體擺放任意) =================
+// 校準後,handleBLEData 會把感測器資料換算成「使用者視角」:
+//   angleX = 往「上」的傾斜角、angleY = 往「右」的傾斜角
+// 因此智慧角度、控球、射擊、雲端上傳等所有分頁都自動使用校準後的方向。
+const ORI_STEPS = [
+  '① 握好球,手腕放在舒適的中間位置,保持不動',
+  '② 以你的視角,把球往「右」傾斜(手腕向右偏)並維持',
+  '③ 以你的視角,把球往「上」抬(手腕上抬)並維持'
+];
+let oriG = null;            // 低通後的重力單位向量(感測器座標);舊韌體為 null
+let oriRaw = [0, 0];        // 韌體原始 angleX / angleY
+let oriLastTime = 0;
+let oriCal = null;          // {is3D, p0, eR, eU}
+let oriFlow = null;         // 校準流程狀態
+let oriTimer = null, oriHideTimer = null;
+let oriModalKey = '';
+
+function vDot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+function vSub(a, b) { return a.map((x, i) => x - b[i]); }
+function vScale(a, k) { return a.map(x => x * k); }
+function vLen(a) { return Math.sqrt(vDot(a, a)); }
+function vNorm(a) { const l = vLen(a) || 1; return a.map(x => x / l); }
+function vOrth(a, basis) { let r = a.slice(); basis.forEach(b => { r = vSub(r, vScale(b, vDot(r, b))); }); return r; }
+function avgVec(list) {
+  const n = list.length, out = list[0].map(() => 0);
+  list.forEach(v => v.forEach((x, i) => { out[i] += x / n; }));
+  return out;
+}
+
+// 每個 BLE 封包呼叫:更新原始角度與重力向量
+function oriFeed(rawX, rawY, acc) {
+  oriLastTime = performance.now();
+  oriRaw = [rawX, rawY];
+  if (acc) {
+    const n = Math.hypot(acc[0], acc[1], acc[2]);
+    if (n > 11000 && n < 23000) { // 約 0.67g~1.4g,排除劇烈晃動的失真樣本
+      const u = [acc[0] / n, acc[1] / n, acc[2] / n];
+      oriG = oriG ? vNorm([oriG[0] + (u[0] - oriG[0]) * 0.25, oriG[1] + (u[1] - oriG[1]) * 0.25, oriG[2] + (u[2] - oriG[2]) * 0.25]) : u;
+    }
+  }
+}
+
+// 已校準時回傳 {x: 上為正, y: 右為正}(度);未校準回傳 null(沿用韌體原始角度)
+function oriApply() {
+  if (!oriCal) return null;
+  let h, v;
+  if (oriCal.is3D) {
+    if (!oriG) return null;
+    const a = vDot(oriG, oriCal.p0), b = vDot(oriG, oriCal.eR), c = vDot(oriG, oriCal.eU);
+    h = Math.atan2(b, a) * 57.2958;
+    v = Math.atan2(c, a) * 57.2958;
+  } else {
+    const t = vSub(oriRaw, oriCal.p0);
+    h = vDot(t, oriCal.eR);
+    v = vDot(t, oriCal.eU);
+  }
+  return { x: Math.round(v * 10) / 10, y: Math.round(h * 10) / 10 };
+}
+
+function oriVec() {
+  if (performance.now() - oriLastTime > 800) return null;
+  return oriG ? oriG.slice() : oriRaw.slice();
+}
+
+// ---------- 校準流程 ----------
+function oriStart() {
+  if (oriFlow) { oriCancel(); return; }
+  if (!oriVec()) { alert('請先連線藍芽裝置,再進行方向校準。'); return; }
+  if (typeof sState !== 'undefined' && sState === 'playing') toggleShootPause();
+  clearTimeout(oriHideTimer);
+  oriFlow = { step: 0, t0: performance.now(), samples: [], res: [], sampling: false, countdown: 3, is3D: !!oriG, warn: '', done: false };
+  clearInterval(oriTimer);
+  oriTimer = setInterval(oriTick, 50);
+  oriRenderModal();
+}
+
+function oriCancel() {
+  clearInterval(oriTimer); oriTimer = null;
+  oriFlow = null;
+  document.getElementById('oriModal').classList.remove('show');
+}
+
+function oriTick() {
+  const f = oriFlow;
+  if (!f) return;
+  const v = oriVec();
+  if (!v || (f.is3D && !oriG)) { oriCancel(); alert('藍芽資料中斷,方向校準已取消。'); return; }
+  const el = performance.now() - f.t0;
+  if (el < 2500) { f.sampling = false; f.countdown = Math.ceil((2500 - el) / 1000); oriRenderModal(); return; }
+  f.sampling = true;
+  oriRenderModal();
+  f.samples.push(v);
+  if (el < 3500) return;
+
+  let avg = avgVec(f.samples);
+  if (f.is3D) avg = vNorm(avg);
+  const minTilt = f.is3D ? 0.2 : 12; // 約 12 度以上
+  f.samples = [];
+  if (f.step === 0) {
+    f.res[0] = avg;
+  } else {
+    const p0 = f.res[0], base = f.is3D ? [p0] : [];
+    const d0 = vOrth(vSub(avg, p0), base);
+    if (vLen(d0) < minTilt) { oriRestartStep('傾斜幅度不夠,請再傾斜大一點'); return; }
+    if (f.step === 1) {
+      f.res[1] = d0;
+    } else {
+      const eR = vNorm(f.res[1]);
+      const dU = vOrth(d0, base.concat([eR]));
+      if (vLen(dU) / vLen(d0) < 0.5) { oriRestartStep('「上」與「右」方向太接近,請只往上傾斜'); return; }
+      oriCal = { is3D: f.is3D, p0: f.res[0], eR: eR, eU: vNorm(dU) };
+      angleOffsetX = 0; angleOffsetY = 0; // 中立姿勢已由校準定義,清掉舊的歸零偏移
+      safetyGraceUntil = Date.now() + 3000;
+      clearInterval(oriTimer); oriTimer = null;
+      f.done = true;
+      oriRenderModal();
+      oriUpdateStatus();
+      oriFlow = null;
+      oriHideTimer = setTimeout(() => document.getElementById('oriModal').classList.remove('show'), 2200);
+      return;
+    }
+  }
+  f.step++;
+  f.t0 = performance.now();
+  f.warn = '';
+  oriRenderModal();
+}
+
+function oriRestartStep(msg) {
+  oriFlow.t0 = performance.now();
+  oriFlow.samples = [];
+  oriFlow.warn = '⚠️ ' + msg;
+  oriRenderModal();
+}
+
+// 以目前姿勢重新定義「中立」,保留已學到的右/上方向
+function oriRezero() {
+  if (!oriCal) return;
+  if (oriCal.is3D && oriG) {
+    oriCal.p0 = oriG.slice();
+    oriCal.eR = vNorm(vOrth(oriCal.eR, [oriCal.p0]));
+    oriCal.eU = vNorm(vOrth(oriCal.eU, [oriCal.p0, oriCal.eR]));
+  } else if (!oriCal.is3D) {
+    oriCal.p0 = oriRaw.slice();
+  }
+  angleOffsetX = 0; angleOffsetY = 0;
+  safetyGraceUntil = Date.now() + 3000;
+}
+
+function oriClear() {
+  oriCal = null;
+  angleOffsetX = 0; angleOffsetY = 0;
+  hasAngleZeroRef = false;
+  safetyGraceUntil = Date.now() + 3000;
+  oriUpdateStatus();
+}
+
+// ---------- UI ----------
+function oriRenderModal() {
+  const f = oriFlow, modal = document.getElementById('oriModal');
+  let title, msg, sub, showCancel = true;
+  if (f && f.done) {
+    title = '✅ 方向校準完成';
+    msg = '現在往「右」傾斜,右方向角度就會增加;往「上」抬,上方向角度就會增加。';
+    sub = ''; showCancel = false;
+  } else if (f) {
+    title = '方向校準 ' + (f.step + 1) + '/3';
+    msg = (f.warn ? f.warn + '\n' : '') + ORI_STEPS[f.step] + (f.is3D ? '' : '\n(目前為角度模式,更新韌體後會更準)');
+    sub = f.sampling ? '取樣中…請維持姿勢' : '倒數 ' + f.countdown;
+  } else return;
+  const key = title + '|' + msg + '|' + sub;
+  if (key !== oriModalKey) {
+    oriModalKey = key;
+    document.getElementById('oriTitle').innerText = title;
+    document.getElementById('oriMsg').innerText = msg;
+    document.getElementById('oriSub').innerText = sub;
+    document.getElementById('oriCancelBtn').style.display = showCancel ? 'inline-block' : 'none';
+  }
+  modal.classList.add('show');
+}
+
+function oriUpdateStatus() {
+  const tag = document.getElementById('oriStatusTag');
+  const clr = document.getElementById('oriClearBtn');
+  if (oriCal) {
+    tag.innerText = '🧭 方向:已校準(' + (oriCal.is3D ? '重力向量' : '角度') + '模式)';
+    tag.style.color = '#2f7d4f';
+    clr.style.display = 'inline-block';
+  } else {
+    tag.innerText = '🧭 方向:未校準(球體請先校準)';
+    tag.style.color = 'var(--text-muted)';
+    clr.style.display = 'none';
+  }
+}
+oriUpdateStatus();
+
+// ================= 🔫 握力射擊靶場 (MPU6500 瞄準 + 壓力感測器開火) =================
+const shootCanvas = document.getElementById('shootCanvas');
+const sctx = shootCanvas.getContext('2d');
+const SW = 800, SH = 500, STAU = Math.PI * 2;
+const MAG_SIZE = 6;
+const RELOAD_SEC = 1.0;
+const STEADY_SPEED = 90; // 準星移動速度低於此值(px/秒)開火,視為「穩定射擊」
+
+const SHOOT_DIFF = {
+  easy:   { r: 42, life: 4.2, max: 2, spawn: 1.1, drift: 0,  decoy: 0,    gold: 0.10 },
+  normal: { r: 34, life: 3.4, max: 3, spawn: 0.9, drift: 40, decoy: 0.18, gold: 0.12 },
+  hard:   { r: 26, life: 2.6, max: 4, spawn: 0.7, drift: 90, decoy: 0.25, gold: 0.14 }
+};
+
+let shootAnimId = null;
+let sLastFrame = 0;
+let sState = 'idle'; // idle | playing | paused | over
+let sDiffKey = 'normal';
+let sTotalTime = 60, sTimeLeft = 60;
+let sScore = 0, sShots = 0, sHits = 0, sCombo = 0, sBestCombo = 0, sSteadyHits = 0;
+let sMag = MAG_SIZE, sReloading = false, sReloadT = 0;
+let sTargets = [], sParticles = [], sTexts = [], sMarks = [];
+let sSpawnT = 0, sFlash = 0, sLastShot = 0, sOverAt = 0;
+let sAim = { x: SW / 2, y: SH / 2 };
+let sAimSpeed = 0;
+let sAng = { x: 0, y: 0 };       // 已套用全域校準的角度 (angleX / angleY)
+let sZeroX = 0, sZeroY = 0;      // 遊戲內的「瞄準歸零」偏移
+let sSens = 1.0, sInvX = false, sInvY = false;
+let sThreshold = 500, sPressure = 0, sTriggerArmed = true;
+let sLastBleTime = 0;
+let sMouse = { x: SW / 2, y: SH / 2, active: false };
+let sTestUntil = 0, sTestPeak = 0;
+let sBest = 0;
+let sHudCache = {};
+try { sBest = parseInt(localStorage.getItem('shoot_best_score') || '0') || 0; } catch (e) {}
+
+function sRand(a, b) { return a + Math.random() * (b - a); }
+
+// ---------- 音效 (沿用全域 audioCtx) ----------
+function playShotSound() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(520, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+  g.gain.setValueAtTime(0.22, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.15);
+}
+function playClickSound() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'square';
+  o.frequency.setValueAtTime(1200, t);
+  g.gain.setValueAtTime(0.08, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.06);
+}
+
+// ---------- 感測器輸入 (由 handleBLEData 以完整 50Hz 直接呼叫) ----------
+function shooterInput(angleX, angleY, rawAdc) {
+  sLastBleTime = performance.now();
+  sAng.x = angleX;
+  sAng.y = angleY;
+  const cal = Math.max(0, rawAdc - adcOffset);
+  sPressure = cal;
+  if (cal > sTestPeak) sTestPeak = cal;
+
+  // 滯後觸發:超過門檻開火一次,放鬆到門檻 60% 以下才重新上膛(避免一次握緊連發)
+  if (sTriggerArmed && cal >= sThreshold) {
+    sTriggerArmed = false;
+    shootFire();
+  } else if (!sTriggerArmed && cal < sThreshold * 0.6) {
+    sTriggerArmed = true;
+  }
+}
+
+// ---------- 遊戲流程 ----------
+function startShoot() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  sState = 'playing';
+  sTimeLeft = sTotalTime;
+  sScore = 0; sShots = 0; sHits = 0; sCombo = 0; sBestCombo = 0; sSteadyHits = 0;
+  sMag = MAG_SIZE; sReloading = false; sReloadT = 0;
+  sTargets = []; sParticles = []; sTexts = []; sMarks = [];
+  sSpawnT = 0.3; sLastShot = 0;
+  spawnShootTarget();
+  document.getElementById('shootPauseBtn').innerText = '⏸️ 暫停';
+  updateShootHud(true);
+}
+
+function toggleShootPause() {
+  const btn = document.getElementById('shootPauseBtn');
+  if (sState === 'playing') { sState = 'paused'; btn.innerText = '▶️ 繼續'; }
+  else if (sState === 'paused') { sState = 'playing'; btn.innerText = '⏸️ 暫停'; }
+}
+
+function endShoot() {
+  sState = 'over';
+  sOverAt = performance.now();
+  if (sScore > sBest) {
+    sBest = sScore;
+    try { localStorage.setItem('shoot_best_score', String(sBest)); } catch (e) {}
+  }
+  playVictoryFanfare();
+}
+
+function setShootDiff(v) { sDiffKey = v; }
+function setShootTime(v) {
+  sTotalTime = parseInt(v);
+  if (sState !== 'playing' && sState !== 'paused') { sTimeLeft = sTotalTime; updateShootHud(true); }
+}
+function setShootSens(v) {
+  sSens = parseFloat(v);
+  document.getElementById('shootSensVal').innerText = sSens.toFixed(1) + 'x';
+}
+function setShootThreshold(v) {
+  sThreshold = parseInt(v);
+  document.getElementById('shootThVal').innerText = sThreshold;
+}
+function shootSetInv() {
+  sInvX = document.getElementById('shootInvX').checked;
+  sInvY = document.getElementById('shootInvY').checked;
+}
+function shootZeroAim() {
+  if (oriCal) { oriRezero(); sZeroX = 0; sZeroY = 0; } // 已方向校準:重新定義中立姿勢
+  else { sZeroX = sAng.x; sZeroY = sAng.y; }
+  setShootHint('✨ 已以目前手腕姿勢作為準星中心');
+}
+
+// 握力測試:握住 3 秒,取最大值的 50% 當開火門檻
+function shootGripTest() {
+  if (performance.now() - sLastBleTime > 800) { setShootHint('⚠️ 請先連線藍芽裝置才能測試握力'); return; }
+  sTestPeak = 0;
+  sTestUntil = performance.now() + 3000;
+  document.getElementById('shootGripTestBtn').disabled = true;
+  setShootHint('🤏 請用「舒適但確實」的力量握緊握力器 3 秒…');
+}
+function finishGripTest() {
+  sTestUntil = 0;
+  document.getElementById('shootGripTestBtn').disabled = false;
+  if (sTestPeak < 80) { setShootHint('⚠️ 沒有偵測到明顯握力,請確認壓力感測器位置後再試'); return; }
+  const th = Math.min(3000, Math.max(100, Math.round(sTestPeak * 0.5 / 50) * 50));
+  document.getElementById('shootThRange').value = th;
+  setShootThreshold(th);
+  setShootHint('✅ 最大握力 ' + sTestPeak + ',開火門檻已設為 ' + th + '(約 50%)');
+}
+
+let sHintTimer = null;
+function setShootHint(msg) {
+  const el = document.getElementById('shootHint');
+  el.innerText = msg;
+  clearTimeout(sHintTimer);
+  sHintTimer = setTimeout(() => { el.innerText = ''; }, 5000);
+}
+
+// ---------- 開火與命中判定 ----------
+function shootFire() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (oriFlow) return;
+  const now = performance.now();
+
+  if (sState === 'idle' || sState === 'over') {
+    if (now - sOverAt > 800) startShoot();
+    return;
+  }
+  if (sState !== 'playing') return;
+  if (sReloading) { playClickSound(); return; }
+  if (now - sLastShot < 180) return;
+  sLastShot = now;
+
+  sMag--; sShots++; sFlash = 1;
+  playShotSound();
+  const steady = sAimSpeed < STEADY_SPEED;
+  const sx = sAim.x, sy = sAim.y;
+
+  let hitTarget = null;
+  for (let i = sTargets.length - 1; i >= 0; i--) {
+    const t = sTargets[i];
+    if (Math.hypot(t.x - sx, t.y - sy) <= t.r) { hitTarget = t; break; }
+  }
+
+  if (!hitTarget) {
+    sCombo = 0;
+    sMarks.push({ x: sx, y: sy, life: 1 });
+    sTexts.push({ x: sx, y: sy - 20, txt: 'MISS', color: '#9fb0a8', size: 16, life: 0.6, max: 0.6 });
+  } else {
+    const t = hitTarget;
+    sTargets.splice(sTargets.indexOf(t), 1);
+    if (t.type === 'decoy') {
+      sCombo = 0;
+      sScore = Math.max(0, sScore - 20);
+      playWarningBeep();
+      sTexts.push({ x: t.x, y: t.y - 10, txt: '誤傷友軍 -20', color: '#ff6b57', size: 22, life: 1, max: 1 });
+      burst(t.x, t.y, '#ff6b57', 10);
+    } else {
+      sHits++; sCombo++;
+      if (sCombo > sBestCombo) sBestCombo = sCombo;
+      let base, label;
+      if (t.type === 'gold') { base = 50; label = 'GOLD'; sTimeLeft += 2; }
+      else {
+        const ratio = Math.hypot(t.x - sx, t.y - sy) / t.r;
+        if (ratio <= 0.25) { base = 30; label = 'BULLSEYE'; }
+        else if (ratio <= 0.6) { base = 20; label = ''; }
+        else { base = 10; label = ''; }
+      }
+      const mult = Math.min(5, 1 + Math.floor(sCombo / 3));
+      let pts = base * mult;
+      if (steady) { pts += 5; sSteadyHits++; }
+      sScore += pts;
+      playSuccessBeep();
+      const txt = (label ? label + ' ' : '') + '+' + pts + (mult > 1 ? ' (x' + mult + ')' : '');
+      sTexts.push({ x: t.x, y: t.y - 12, txt: txt, color: t.type === 'gold' ? '#f0b43c' : '#ffffff', size: label ? 24 : 20, life: 0.9, max: 0.9 });
+      if (steady) sTexts.push({ x: t.x, y: t.y + 12, txt: '穩定 +5', color: '#8fd8c8', size: 14, life: 0.9, max: 0.9 });
+      if (t.type === 'gold') sTexts.push({ x: t.x, y: t.y + 30, txt: '+2 秒', color: '#f0b43c', size: 14, life: 0.9, max: 0.9 });
+      burst(t.x, t.y, t.type === 'gold' ? '#f0b43c' : '#c1402e', 14);
+    }
+  }
+
+  if (sMag <= 0) { sReloading = true; sReloadT = 0; }
+  updateShootHud(true);
+}
+
+function burst(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * STAU, s = sRand(60, 220);
+    sParticles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5, max: 0.5, color: color });
+  }
+}
+
+function spawnShootTarget() {
+  const d = SHOOT_DIFF[sDiffKey];
+  const roll = Math.random();
+  let type = 'normal';
+  if (roll < d.decoy) type = 'decoy';
+  else if (roll < d.decoy + d.gold) type = 'gold';
+  const r = type === 'gold' ? d.r * 0.7 : d.r;
+  let x = SW / 2, y = SH / 2, ok = false;
+  for (let i = 0; i < 12 && !ok; i++) {
+    x = sRand(r + 30, SW - r - 30);
+    y = sRand(r + 70, SH - r - 60);
+    ok = sTargets.every(t => Math.hypot(t.x - x, t.y - y) > t.r + r + 20);
+  }
+  const sp = d.drift ? sRand(0.5, 1) * d.drift : 0;
+  sTargets.push({
+    x: x, y: y, r: r, type: type, age: 0,
+    life: type === 'gold' ? d.life * 0.5 : d.life,
+    vx: sp * (Math.random() < 0.5 ? -1 : 1),
+    vy: d.drift ? sRand(-0.3, 0.3) * d.drift : 0
+  });
+}
+
+// ---------- 每幀更新 ----------
+function shootUpdate(dt) {
+  const nowMs = performance.now();
+  const ble = (nowMs - sLastBleTime) < 800;
+
+  // 握力測試計時
+  if (sTestUntil && nowMs >= sTestUntil) finishGripTest();
+
+  // 準星位置:角度直接對應畫面位置(與控球遊戲同方向:Y→左右、-X→上下)
+  let tx = sAim.x, ty = sAim.y;
+  if (ble) {
+    // 角度已是使用者視角(已方向校準時由 handleBLEData 換算):Y→左右、-X→上下
+    const dx = (sAng.y - sZeroY) * (sInvX ? -1 : 1);
+    const dy = -(sAng.x - sZeroX) * (sInvY ? -1 : 1);
+    tx = SW / 2 + dx / (25 / sSens) * (SW / 2);
+    ty = SH / 2 + dy / (18 / sSens) * (SH / 2);
+  } else if (sMouse.active) {
+    tx = sMouse.x; ty = sMouse.y;
+  }
+  tx = Math.max(0, Math.min(SW, tx));
+  ty = Math.max(0, Math.min(SH, ty));
+  const k = ble ? Math.min(1, dt * 16) : 1;
+  const px = sAim.x, py = sAim.y;
+  sAim.x += (tx - sAim.x) * k;
+  sAim.y += (ty - sAim.y) * k;
+  if (dt > 0) {
+    const inst = Math.hypot(sAim.x - px, sAim.y - py) / dt;
+    sAimSpeed += (inst - sAimSpeed) * Math.min(1, dt * 8);
+  }
+
+  if (sFlash > 0) sFlash = Math.max(0, sFlash - dt * 6);
+
+  // 特效永遠更新
+  for (let i = sParticles.length - 1; i >= 0; i--) {
+    const p = sParticles[i];
+    p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94;
+    if (p.life <= 0) sParticles.splice(i, 1);
+  }
+  for (let i = sTexts.length - 1; i >= 0; i--) {
+    const t = sTexts[i];
+    t.life -= dt; t.y -= 30 * dt;
+    if (t.life <= 0) sTexts.splice(i, 1);
+  }
+  for (let i = sMarks.length - 1; i >= 0; i--) {
+    sMarks[i].life -= dt;
+    if (sMarks[i].life <= 0) sMarks.splice(i, 1);
+  }
+
+  if (sState !== 'playing') return;
+
+  // 倒數
+  sTimeLeft -= dt;
+  if (sTimeLeft <= 0) { sTimeLeft = 0; endShoot(); updateShootHud(true); return; }
+
+  // 換彈
+  if (sReloading) {
+    sReloadT += dt;
+    if (sReloadT >= RELOAD_SEC) { sReloading = false; sMag = MAG_SIZE; playClickSound(); }
+  }
+
+  // 目標移動 / 過期
+  const d = SHOOT_DIFF[sDiffKey];
+  for (let i = sTargets.length - 1; i >= 0; i--) {
+    const t = sTargets[i];
+    t.age += dt;
+    t.x += t.vx * dt; t.y += t.vy * dt;
+    if (t.x < t.r + 10) { t.x = t.r + 10; t.vx = Math.abs(t.vx); }
+    if (t.x > SW - t.r - 10) { t.x = SW - t.r - 10; t.vx = -Math.abs(t.vx); }
+    if (t.y < t.r + 60) { t.y = t.r + 60; t.vy = Math.abs(t.vy); }
+    if (t.y > SH - t.r - 50) { t.y = SH - t.r - 50; t.vy = -Math.abs(t.vy); }
+    if (t.age >= t.life) sTargets.splice(i, 1);
+  }
+
+  // 生成
+  sSpawnT -= dt;
+  if (sTargets.length === 0) sSpawnT = Math.min(sSpawnT, 0.2);
+  if (sSpawnT <= 0 && sTargets.length < d.max) {
+    spawnShootTarget();
+    sSpawnT = d.spawn * sRand(0.7, 1.3);
+  }
+
+  updateShootHud(false);
+}
+
+// ---------- DOM 數據更新 (有變動才寫入) ----------
+function setHud(id, val) {
+  if (sHudCache[id] === val) return;
+  sHudCache[id] = val;
+  document.getElementById(id).innerText = val;
+}
+function updateShootHud(force) {
+  setHud('shootScore', sScore);
+  setHud('shootTime', Math.ceil(sTimeLeft));
+  setHud('shootAcc', sShots > 0 ? Math.round(sHits / sShots * 100) : 0);
+  setHud('shootCombo', sCombo);
+}
+
+function updateShootGauge(ble) {
+  const frac = Math.min(1, sPressure / (sThreshold * 2));
+  const fill = document.getElementById('shootGaugeFill');
+  fill.style.width = (ble ? frac * 100 : 0) + '%';
+  fill.classList.toggle('armed', sPressure >= sThreshold);
+  setHud('shootPressureVal', ble ? sPressure : 0);
+  setHud('shootModeTag', ble ? (oriCal ? '🟢 藍芽瞄準(已方向校準)' : '🟡 藍芽瞄準(未方向校準)') : '🖱️ 滑鼠測試模式');
+}
+
+// ---------- 繪圖 ----------
+function drawRings(x, y, r, colors) {
+  for (let i = 0; i < colors.length; i++) {
+    sctx.beginPath();
+    sctx.arc(x, y, r * (1 - i / colors.length), 0, STAU);
+    sctx.fillStyle = colors[i];
+    sctx.fill();
+  }
+}
+
+function drawShootBackground() {
+  const g = sctx.createLinearGradient(0, 0, 0, SH);
+  g.addColorStop(0, '#10322d');
+  g.addColorStop(1, '#0c1a17');
+  sctx.fillStyle = g;
+  sctx.fillRect(0, 0, SW, SH);
+  sctx.strokeStyle = 'rgba(143, 216, 200, 0.07)';
+  sctx.lineWidth = 1;
+  for (let x = 0; x <= SW; x += 40) { sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, SH); sctx.stroke(); }
+  for (let y = 0; y <= SH; y += 40) { sctx.beginPath(); sctx.moveTo(0, y); sctx.lineTo(SW, y); sctx.stroke(); }
+  sctx.fillStyle = '#0a1412';
+  sctx.fillRect(0, SH - 40, SW, 40);
+  sctx.fillStyle = 'rgba(240, 180, 60, 0.25)';
+  sctx.fillRect(0, SH - 40, SW, 2);
+}
+
+function drawShootTarget(t) {
+  const a = Math.min(1, t.age / 0.15);
+  const c1 = 1.70158, c3 = c1 + 1;
+  const scale = 1 + c3 * Math.pow(a - 1, 3) + c1 * Math.pow(a - 1, 2);
+  const remain = t.life - t.age;
+  sctx.save();
+  sctx.globalAlpha = remain < 0.4 ? Math.max(0, remain / 0.4) : 1;
+  sctx.translate(t.x, t.y);
+  sctx.scale(scale, scale);
+  if (t.type === 'normal') {
+    drawRings(0, 0, t.r, ['#f4efe3', '#c1402e', '#f4efe3', '#c1402e', '#f0b43c']);
+  } else if (t.type === 'gold') {
+    drawRings(0, 0, t.r, ['#f0b43c', '#fff3c4', '#f0b43c', '#fff3c4', '#c1402e']);
+  } else {
+    sctx.beginPath(); sctx.arc(0, 0, t.r, 0, STAU);
+    sctx.fillStyle = '#0b6e63'; sctx.fill();
+    sctx.lineWidth = 3; sctx.strokeStyle = '#ffffff'; sctx.stroke();
+    sctx.fillStyle = '#ffffff';
+    const w = t.r * 0.28, l = t.r * 0.62;
+    sctx.fillRect(-w / 2, -l, w, l * 2);
+    sctx.fillRect(-l, -w / 2, l * 2, w);
+  }
+  // 剩餘壽命弧線
+  sctx.beginPath();
+  sctx.arc(0, 0, t.r + 6, -Math.PI / 2, -Math.PI / 2 + STAU * Math.max(0, 1 - t.age / t.life));
+  sctx.lineWidth = 3;
+  sctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  sctx.stroke();
+  sctx.restore();
+}
+
+function drawCrosshair() {
+  const x = sAim.x, y = sAim.y;
+  const frac = Math.min(1, sPressure / sThreshold);
+  const col = sReloading ? 'rgba(240,180,60,0.4)' : '#f0b43c';
+  sctx.save();
+  sctx.translate(x, y);
+  sctx.strokeStyle = col;
+  sctx.lineWidth = 2.5;
+  sctx.beginPath(); sctx.arc(0, 0, 18, 0, STAU); sctx.stroke();
+  sctx.beginPath();
+  sctx.moveTo(-28, 0); sctx.lineTo(-10, 0); sctx.moveTo(10, 0); sctx.lineTo(28, 0);
+  sctx.moveTo(0, -28); sctx.lineTo(0, -10); sctx.moveTo(0, 10); sctx.lineTo(0, 28);
+  sctx.stroke();
+  sctx.fillStyle = col;
+  sctx.beginPath(); sctx.arc(0, 0, 2.5, 0, STAU); sctx.fill();
+  // 握力蓄力弧:握越緊弧越長,滿圈即開火
+  if (frac > 0.02 && !sReloading) {
+    sctx.beginPath();
+    sctx.arc(0, 0, 25, -Math.PI / 2, -Math.PI / 2 + STAU * frac);
+    sctx.lineWidth = 4;
+    sctx.strokeStyle = frac >= 1 ? '#ff6b57' : 'rgba(240,180,60,0.9)';
+    sctx.stroke();
+  }
+  // 換彈進度
+  if (sReloading) {
+    sctx.beginPath();
+    sctx.arc(0, 0, 34, -Math.PI / 2, -Math.PI / 2 + STAU * Math.min(1, sReloadT / RELOAD_SEC));
+    sctx.lineWidth = 3;
+    sctx.strokeStyle = '#8fd8c8';
+    sctx.stroke();
+  }
+  // 開火閃光
+  if (sFlash > 0) {
+    sctx.beginPath();
+    sctx.arc(0, 0, 18 + (1 - sFlash) * 22, 0, STAU);
+    sctx.lineWidth = 3;
+    sctx.strokeStyle = 'rgba(255,255,255,' + sFlash + ')';
+    sctx.stroke();
+  }
+  sctx.restore();
+}
+
+function drawShootHud() {
+  // 時間條
+  const frac = Math.max(0, sTimeLeft / sTotalTime);
+  sctx.fillStyle = 'rgba(255,255,255,0.08)';
+  sctx.fillRect(0, 0, SW, 6);
+  sctx.fillStyle = sTimeLeft <= 10 ? '#ff6b57' : '#f0b43c';
+  sctx.fillRect(0, 0, SW * Math.min(1, frac), 6);
+  // 彈匣
+  for (let i = 0; i < MAG_SIZE; i++) {
+    sctx.fillStyle = i < sMag ? '#f0b43c' : 'rgba(255,255,255,0.15)';
+    sctx.fillRect(16 + i * 18, SH - 28, 12, 18);
+  }
+  if (sReloading) {
+    sctx.fillStyle = '#8fd8c8';
+    sctx.font = 'bold 14px "Noto Sans TC", sans-serif';
+    sctx.textAlign = 'left';
+    sctx.fillText('換彈中…', 16 + MAG_SIZE * 18 + 8, SH - 14);
+  }
+  // 連擊倍率
+  const mult = Math.min(5, 1 + Math.floor(sCombo / 3));
+  sctx.textAlign = 'right';
+  sctx.fillStyle = mult > 1 ? '#f0b43c' : 'rgba(255,255,255,0.5)';
+  sctx.font = 'bold 22px "Noto Sans TC", sans-serif';
+  sctx.fillText('x' + mult, SW - 16, SH - 12);
+  sctx.font = '13px "Noto Sans TC", sans-serif';
+  sctx.fillStyle = 'rgba(255,255,255,0.5)';
+  sctx.fillText('倍率(每連擊 3 次 +1)', SW - 60, SH - 14);
+}
+
+function drawShootOverlay(title, lines) {
+  sctx.fillStyle = 'rgba(12, 26, 23, 0.82)';
+  sctx.fillRect(0, 0, SW, SH);
+  sctx.textAlign = 'center';
+  sctx.fillStyle = '#f0b43c';
+  sctx.font = 'bold 40px "Noto Sans TC", sans-serif';
+  sctx.fillText(title, SW / 2, 150);
+  sctx.fillStyle = '#ffffff';
+  sctx.font = '20px "Noto Sans TC", sans-serif';
+  lines.forEach((ln, i) => sctx.fillText(ln, SW / 2, 205 + i * 34));
+}
+
+function shootRender() {
+  const ble = (performance.now() - sLastBleTime) < 800;
+  drawShootBackground();
+
+  sTargets.forEach(drawShootTarget);
+
+  sMarks.forEach(m => {
+    sctx.beginPath(); sctx.arc(m.x, m.y, 6, 0, STAU);
+    sctx.strokeStyle = 'rgba(255,255,255,' + (m.life * 0.5) + ')';
+    sctx.lineWidth = 2; sctx.stroke();
+  });
+  sParticles.forEach(p => {
+    sctx.globalAlpha = Math.max(0, p.life / p.max);
+    sctx.fillStyle = p.color;
+    sctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  });
+  sctx.globalAlpha = 1;
+  sTexts.forEach(t => {
+    sctx.globalAlpha = Math.max(0, t.life / t.max);
+    sctx.fillStyle = t.color;
+    sctx.font = 'bold ' + t.size + 'px "Noto Sans TC", sans-serif';
+    sctx.textAlign = 'center';
+    sctx.fillText(t.txt, t.x, t.y);
+  });
+  sctx.globalAlpha = 1;
+
+  drawShootHud();
+
+  if (sState === 'idle') {
+    drawShootOverlay('握力射擊靶場', [
+      '轉動手腕瞄準 · 握緊握力器開火',
+      oriCal ? '最高紀錄:' + sBest + ' 分' : '手持球體請先按「🧭 方向校準」',
+      '握緊握力器(或點擊 / 空白鍵)開始'
+    ]);
+  } else if (sState === 'paused') {
+    drawShootOverlay('⏸ 暫停中', ['按「繼續」回到遊戲']);
+  } else if (sState === 'over') {
+    const acc = sShots > 0 ? Math.round(sHits / sShots * 100) : 0;
+    drawShootOverlay('時間到!', [
+      '得分 ' + sScore + (sScore >= sBest && sScore > 0 ? '  🏆 新紀錄' : '  (最高 ' + sBest + ')'),
+      '命中率 ' + acc + '%(' + sHits + '/' + sShots + ')',
+      '最高連擊 ' + sBestCombo + '　穩定射擊 ' + sSteadyHits + ' 次',
+      '握緊握力器再來一局'
+    ]);
+  }
+
+  drawCrosshair();
+  updateShootGauge(ble);
+}
+
+// ---------- 主迴圈 ----------
+function shootLoop(ts) {
+  let dt = (ts - sLastFrame) / 1000;
+  if (!(dt > 0)) dt = 0.016;
+  dt = Math.min(0.05, dt);
+  sLastFrame = ts;
+  shootUpdate(dt);
+  shootRender();
+  if (currentActiveTab === 'shoot-tab') shootAnimId = requestAnimationFrame(shootLoop);
+  else shootAnimId = null;
+}
+
+function enterShootTab() {
+  sOverAt = performance.now(); // 避免切換分頁時的握力直接開局
+  sTriggerArmed = false;       // 需先放鬆再握才算開火
+  if (sState === 'playing') sState = 'paused';
+  document.getElementById('shootPauseBtn').innerText = sState === 'paused' ? '▶️ 繼續' : '⏸️ 暫停';
+  if (!shootAnimId) { sLastFrame = performance.now(); shootAnimId = requestAnimationFrame(shootLoop); }
+}
+
+function leaveShootTab() {
+  if (shootAnimId) { cancelAnimationFrame(shootAnimId); shootAnimId = null; }
+  if (sState === 'playing') {
+    sState = 'paused';
+    document.getElementById('shootPauseBtn').innerText = '▶️ 繼續';
+  }
+}
+
+// ---------- 滑鼠 / 鍵盤測試輸入 ----------
+function shootCanvasPos(e) {
+  const rect = shootCanvas.getBoundingClientRect();
+  return { x: (e.clientX - rect.left) / rect.width * SW, y: (e.clientY - rect.top) / rect.height * SH };
+}
+shootCanvas.addEventListener('mousemove', (e) => {
+  const p = shootCanvasPos(e);
+  sMouse.x = p.x; sMouse.y = p.y; sMouse.active = true;
+});
+shootCanvas.addEventListener('mouseleave', () => { sMouse.active = false; });
+shootCanvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  const p = shootCanvasPos(e);
+  sMouse.x = p.x; sMouse.y = p.y; sMouse.active = true;
+  if (performance.now() - sLastBleTime > 800) {
+    sAim.x = p.x; sAim.y = p.y;
+    shootFire();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (currentActiveTab !== 'shoot-tab' || e.code !== 'Space' || e.repeat) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+  e.preventDefault();
+  shootFire();
+});
 </script>
 </body>
 </html>

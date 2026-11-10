@@ -1859,8 +1859,9 @@ function handleBLEData(event) {
   currentRawAngleX = rawX;
   currentRawAngleY = rawY;
 
-  const calibratedX = rawX - angleOffsetX;
-  const calibratedY = rawY - angleOffsetY;
+  // +0 可把 -0 轉成 0
+  const calibratedX = Math.round((rawX - angleOffsetX) * 10) / 10 + 0;
+  const calibratedY = Math.round((rawY - angleOffsetY) * 10) / 10 + 0;
 
   const statusByte = value.getUint8(6);
   const imuHealthy = (statusByte & 0x01) === 1;
